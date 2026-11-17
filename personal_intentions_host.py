@@ -27,7 +27,7 @@ def login():
 @app.route("/index.html")
 def main():
  if not session.get("auth"):return redirect("/login")
- return Response(base64.b64decode(os.environ["APP_HTML_B64"]).decode("utf-8"),mimetype="text/html")
+ return Response(os.environ["APP_HTML"],mimetype="text/html")
 @app.route("/logout")
 def logout():
  session.clear();return redirect("/login")
