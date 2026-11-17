@@ -35,3 +35,8 @@ def logout():
 def manifest():
  if not session.get("auth"):return ("Unauthorized",401)
  return Response('{"name":"Мои намерения","short_name":"Намерения","display":"standalone","start_url":"/","background_color":"#fcf9fa","theme_color":"#f6e7ed"}',mimetype="application/manifest+json")
+
+@app.route("/api/hypotheses")
+def private_hypotheses():
+ if not session.get("auth"): return ("Unauthorized",401)
+ return Response(os.environ.get("PERSONAL_HYPOTHESES_JSON","[]"),mimetype="application/json")
