@@ -1,5 +1,5 @@
 import os,base64,hmac,time
-from flask import Flask,request,redirect,session,Response
+from flask import Flask,request,redirect,session,Response,send_from_directory
 app=Flask(__name__)
 app.secret_key=os.environ["APP_SESSION_SECRET"]
 app.config.update(SESSION_COOKIE_SECURE=True,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE="Lax",PERMANENT_SESSION_LIFETIME=1209600)
@@ -27,7 +27,7 @@ def login():
 @app.route("/index.html")
 def main():
  if not session.get("auth"):return redirect("/login")
- return Response(os.environ["APP_HTML"],mimetype="text/html")
+ return send_from_directory("intentions_public_ui","index.html")
 @app.route("/logout")
 def logout():
  session.clear();return redirect("/login")
