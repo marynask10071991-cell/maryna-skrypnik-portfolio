@@ -165,7 +165,20 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 .review-card textarea{min-height:105px}
 .review-card button:disabled,.week-review-card button:disabled{opacity:.42;cursor:default}
 @media print{.week-review-card{background:white}}
-</style></head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
+</style>
+<style>
+.journey { background:#f1efff; color:#242049; border-color:#ddd8f6; }
+.journey-route { border-inline-start:3px solid #6554dc; margin:1rem .45rem; padding-inline-start:1rem; }
+.journey-point { margin:.8rem 0; padding:.7rem; border-radius:14px; background:#fff; position:relative; }
+.journey-point::before { content:""; position:absolute; inset-inline-start:-1.43rem; top:1rem; width:.65rem; height:.65rem; border-radius:50%; background:#6554dc; }
+.journey-point[data-kind="post"],.journey-point[data-kind="partial"] { background:#ffe7e3; }
+.journey-point[data-kind="post"]::before,.journey-point[data-kind="partial"]::before { background:#ba4b44; }
+.journey-point[data-kind="done"] { background:#e2f7ee; }
+.journey-point summary { cursor:pointer; }
+.journey-point p { overflow-wrap:anywhere; white-space:pre-wrap; margin:.55rem 0 0; }
+.journey-month { margin:1rem 0 .5rem; }
+</style>
+</head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
 <script>
 (function(){
 "use strict";
@@ -267,7 +280,7 @@ function trackingCard(id, text, weekEntries) {
   const noteId = 'note-'+id;
   const notes = '<div class="note-heading"><label for="'+esc(noteId)+'">Заметка к гипотезе</label>'+
     '<button type="button" class="dictation" data-dictate="'+esc(noteId)+'">🎙 Диктовать</button></div>'+
-    '<textarea id="'+esc(noteId)+'" class="field" rows="2" data-comment="'+esc(id)+'" placeholder="Что получилось или что помешало?">'+esc(answer.note)+'</textarea>'+
+    '<textarea id="'+esc(noteId)+'" class="field" rows="2" data-comment="'+esc(id)+'" placeholder="'+esc(answer.status==="done" ? "Что именно сделала и что произошло после?" : answer.status==="partial" ? "Что успела сделать и где остановилась?" : "Опиши ситуацию своими словами")+'">'+esc(answer.note)+'</textarea>'+
     '<p class="voice-status" role="status" id="'+esc(noteId)+'-status"></p>';
   const followup = answer.status === "done" && previous
     ? '<div class="notice"><b>Прошлый результат</b><br>'+esc(previous.note || "Отмечено без комментария")+'</div>'+
@@ -276,8 +289,8 @@ function trackingCard(id, text, weekEntries) {
       [["","Пока не оценила"],["yes","Да, есть новый результат"],["same","Поддерживаю результат"],["no","Пока без продвижения"]].map(([value,title]) =>
         '<option value="'+value+'"'+((answer.progress||"")===value?' selected':'')+'>'+title+'</option>').join("")+'</select>'
     : '';
-  const reason = answer.status === "post"
-    ? '<label for="reason-'+esc(id)+'">Почему отложила?</label><textarea id="reason-'+esc(id)+'" class="field" rows="2" data-reason="'+esc(id)+'">'+esc(answer.reason)+'</textarea>'
+  const reason = answer.status === "post" || answer.status === "partial"
+    ? '<label for="reason-'+esc(id)+'">Что помешало?</label><textarea placeholder="Опиши момент своими словами. Что случилось? Был ли страх или сомнение?" id="reason-'+esc(id)+'" class="field" rows="2" data-reason="'+esc(id)+'">'+esc(answer.reason)+'</textarea>'
     : '';
   return '<article class="card tracking-card"><h4>'+esc(text)+'</h4>'+zoneBadge(zone)+'<p class="counts">'+esc(zone.reason)+'</p>'+count+
     '<div class="statuses" role="group" aria-label="Отметка за день">'+statuses+'</div>'+notes+followup+reason+'</article>';
@@ -623,10 +636,16 @@ function reflectionCard(ext) {
     '<textarea class="field" id="report-extra" rows="3" placeholder="Мысль, открытие или просто момент для себя">'+esc(ext.extra)+'</textarea></section>';
 }
 const reviewPrompts = {
-  done:"Что изменилось после того, как ты это сделала?",
-  partial:"Что получилось и что помешало довести до конца?",
-  post:"Что помешало сделать это на этой неделе?",
-  none:"Что было с этой гипотезой на неделе?"
+  done:"Что помогло тебе сделать этот шаг именно в этот раз? Какой результат ты заметила?",
+  partial:"В какой момент ты остановилась? Что помешало продолжить, а что уже удалось?",
+  post:"Вспомни момент, когда решила отложить. Что произошло? Что тебя остановило или вызвало сомнение?",
+  none:"Что случилось с этим шагом: ты попробовала его, отложила или пока до него не дошла?"
+};
+const reviewFollowups = {
+  done:"Что из того, что помогло в этот раз, ты могла бы повторить?",
+  partial:"Какое одно изменение помогло бы тебе продолжить с того места, где остановилась?",
+  post:"При каком условии этот шаг стал бы посильным?",
+  none:reviewPrompts.none
 };
 function reviewQuestions(report) {
   return [...report.entries.values()].map(entry=>{
@@ -681,7 +700,7 @@ function renderReview() {
   return '<h2 class="page-title">Итоги недели</h2><p class="review-kicker">Вопрос '+(reviewStep+1)+' из '+questions.length+' · '+weekLabel(report.start)+'</p>'+
     '<progress class="review-progress" aria-label="Номер вопроса" value="'+(reviewStep+1)+'" max="'+questions.length+'"></progress>'+
     '<section class="card review-card"><p class="review-current">'+categoryTitle(question.g)+' · '+status+'</p><h3>'+esc(question.text)+'</h3>'+
-    '<p class="review-question" id="review-prompt">'+reviewPrompts[question.status]+'</p>'+
+    '<p class="review-question" id="review-prompt">'+(question.hasContext ? reviewFollowups : reviewPrompts)[question.status]+'</p>'+
     '<div class="note-heading"><label for="review-answer">Твой ответ</label><button type="button" class="dictation" data-dictate="review-answer">🎙 Диктовать</button></div>'+
     '<textarea class="field" id="review-answer" aria-describedby="review-prompt" data-review-answer="'+esc(question.id)+'" rows="4" placeholder="Расскажи своими словами">'+esc(question.answer)+'</textarea>'+
     '<p class="voice-status" id="review-answer-status" role="status"></p>'+
@@ -739,7 +758,71 @@ function renderReport() {
     '<label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Добавить причины переносов в разбор ChatGPT</label>'+
     '<div class="report-toolbar"><button class="secondary" data-copy-analysis="week">Скопировать для ChatGPT</button></div>';
 }
-function renderProgress(){let all=Object.entries(d.days),actions=all.reduce((sum,[_,x])=>sum+x.items.length,0),done=all.reduce((sum,[_,x])=>sum+Object.values(x.answers).filter(v=>v.status==="done").length,0);let start=startWeek(localDate());let month=localDate().slice(0,7),previous=localDate(new Date(new Date().getFullYear(),new Date().getMonth()-1,1)).slice(0,7),cur=d.months[month]||{},prev=d.months[previous]||{};return '<h2 class="page-title no-print">Аналитика</h2>'+renderMonthly()+'<div class="no-print"><div class="card"><div class="grid3"><div class="metric"><b>'+all.length+'</b><span class="muted">дней с данными</span></div><div class="metric"><b>'+actions+'</b><span class="muted">выбрано</span></div><div class="metric"><b>'+done+'</b><span class="muted">выполнено</span></div></div></div><div class="card"><h3>Мои топ-3 намерения</h3>'+SECTIONS.map((s,i)=>'<button class="choice '+(d.top.includes(i)?'active':'')+'" data-top="'+i+'">'+(d.top.includes(i)?'★ ':'☆ ')+esc(s[0])+'</button>').join("")+'</div><div class="card"><h3>Месячная самооценка</h3><p class="muted">Оцени каждую сферу от 1 до 10. Приложение сравнит оценки с предыдущим месяцем.</p>'+["Отношения","Здоровье","Деятельность","Окружение"].map((x,i)=>'<label>'+x+' · было '+(prev[i]||"—")+', сейчас '+(cur[i]||"—")+'</label><input type="range" min="1" max="10" value="'+(cur[i]||5)+'" data-month="'+i+'">').join("")+'<label>Что изменилось и что могло повлиять?</label><textarea class="field" id="month-note" rows="3" placeholder="Мои мысли и наблюдения...">'+esc(cur.note||"")+'</textarea></div><div class="card"><h3>Резервная копия</h3><p class="muted">Данные хранятся в этом браузере на iPhone. Регулярно сохраняй копию, особенно перед очисткой Safari.</p><button class="secondary full" data-export="1">Скачать резервную копию JSON</button></div><a href="/logout" class="muted">Выйти из приложения</a></div>'}
+let journeyYear = localDate().slice(0,4);
+let journeySphere = "";
+function renderJourney() {
+  const weeks = new Set([...Object.keys(d.days).map(startWeek), ...Object.keys(d.weekReviews || {})]);
+  const entries = summarizeWeeks([...weeks].sort());
+  const points = [...entries.values()].flatMap(entry => {
+    const {g,text} = labelFor(entry.id);
+    return [
+      ...entry.records.filter(record => record.recorded && record.iso.startsWith(journeyYear)),
+      ...entry.responses.map(response => ({
+        iso:response.week, id:entry.id, g, text, status:"review", note:response.text
+      })).filter(record => record.iso.startsWith(journeyYear))
+    ];
+  }).sort((a,b) => a.iso.localeCompare(b.iso) || Number(a.status === "review") - Number(b.status === "review"));
+  const years = [...new Set([localDate().slice(0,4), ...[...weeks].map(week => week.slice(0,4)), ...Object.keys(d.days).map(date => date.slice(0,4))])].sort().reverse();
+  const visible = points.filter(point => journeySphere === "" || String(point.g) === journeySphere);
+  const months = new Map();
+  for (const point of visible) {
+    const key = point.iso.slice(0,7);
+    if (!months.has(key)) months.set(key, []);
+    months.get(key).push(point);
+  }
+  const repeated = [...entries.values()].flatMap(entry => {
+    const {g,text} = labelFor(entry.id);
+    if (journeySphere !== "" && String(g) !== journeySphere) return [];
+    const attempts = visible.filter(point => point.id === entry.id);
+    const obstacles = attempts.filter(point => ["post","partial"].includes(point.status));
+    if (new Set(obstacles.map(point => startWeek(point.iso))).size < 2) return [];
+    const first = obstacles[0];
+    const later = attempts.find(point => point.iso > first.iso && point.status === "done");
+    const question = later
+      ? "Что было по-другому "+dateText(later.iso)+", когда этот шаг получился?"
+      : "Что было общего в этих ситуациях и что ты можешь изменить к следующей попытке?";
+    return ['<details class="journey-point" data-kind="post"><summary>Повторилось · '+esc(text)+'</summary>'+
+      obstacles.map(point => '<p>'+esc(dateText(point.iso)+" · "+answerNames[point.status]+
+        (point.reason || point.note ? " · "+(point.reason || point.note) : ""))+'</p>').join("")+
+      '<p><strong>'+esc(question)+'</strong></p></details>'];
+  }).join("");
+  const route = [...months].map(([month, records]) =>
+    '<h4 class="journey-month">'+esc(new Date(month+"-15T12:00:00").toLocaleDateString("ru-RU",{month:"long"}))+'</h4>'+
+    records.map(point => {
+      const title = point.status === "review" ? "Ответ недели" : point.status === "none" ? "Заметка" : answerNames[point.status];
+      const notes = [
+        point.note,
+        point.reason && "Что помешало: "+point.reason,
+        point.difference && "Что изменилось: "+point.difference,
+        progressNames[point.progress]
+      ].filter(Boolean);
+      const heading = '<strong>'+esc(title)+'</strong> · '+esc(dateText(point.iso))+'<br>'+esc(point.text);
+      return notes.length
+        ? '<details class="journey-point" data-kind="'+esc(point.status)+'"><summary>'+heading+'</summary>'+
+          notes.map(note=>'<p>'+esc(note)+'</p>').join("")+'</details>'
+        : '<div class="journey-point" data-kind="'+esc(point.status)+'">'+heading+'</div>';
+    }).join("")
+  ).join("");
+  return '<section class="card journey no-print"><h3>Моя карта года</h3>'+
+    '<label for="journey-year">Год</label><select id="journey-year" class="field">'+
+    years.map(year=>'<option '+(year===journeyYear?'selected':'')+'>'+year+'</option>').join("")+'</select>'+
+    '<label for="journey-sphere">Сфера</label><select id="journey-sphere" class="field"><option value="">Все сферы</option>'+
+    SECTIONS.map(([name],g)=>'<option value="'+g+'" '+(String(g)===journeySphere?'selected':'')+'>'+esc(name)+'</option>').join("")+'</select>'+
+    (repeated ? '<h4>Где шаг повторно остановился</h4><div class="journey-route">'+repeated+'</div>' : '')+
+    (route ? '<div class="journey-route">'+route+'</div>' : '<p>Здесь появятся твои шаги и ответы из недельных отчётов.</p>')+
+    '</section>';
+}
+function renderProgress(){let all=Object.entries(d.days),actions=all.reduce((sum,[_,x])=>sum+x.items.length,0),done=all.reduce((sum,[_,x])=>sum+Object.values(x.answers).filter(v=>v.status==="done").length,0);let start=startWeek(localDate());let month=localDate().slice(0,7),previous=localDate(new Date(new Date().getFullYear(),new Date().getMonth()-1,1)).slice(0,7),cur=d.months[month]||{},prev=d.months[previous]||{};return '<h2 class="page-title no-print">Аналитика</h2>'+renderJourney()+renderMonthly()+'<div class="no-print"><div class="card"><div class="grid3"><div class="metric"><b>'+all.length+'</b><span class="muted">дней с данными</span></div><div class="metric"><b>'+actions+'</b><span class="muted">выбрано</span></div><div class="metric"><b>'+done+'</b><span class="muted">выполнено</span></div></div></div><div class="card"><h3>Мои топ-3 намерения</h3>'+SECTIONS.map((s,i)=>'<button class="choice '+(d.top.includes(i)?'active':'')+'" data-top="'+i+'">'+(d.top.includes(i)?'★ ':'☆ ')+esc(s[0])+'</button>').join("")+'</div><div class="card"><h3>Месячная самооценка</h3><p class="muted">Оцени каждую сферу от 1 до 10. Приложение сравнит оценки с предыдущим месяцем.</p>'+["Отношения","Здоровье","Деятельность","Окружение"].map((x,i)=>'<label>'+x+' · было '+(prev[i]||"—")+', сейчас '+(cur[i]||"—")+'</label><input type="range" min="1" max="10" value="'+(cur[i]||5)+'" data-month="'+i+'">').join("")+'<label>Что изменилось и что могло повлиять?</label><textarea class="field" id="month-note" rows="3" placeholder="Мои мысли и наблюдения...">'+esc(cur.note||"")+'</textarea></div><div class="card"><h3>Резервная копия</h3><p class="muted">Данные хранятся в этом браузере на iPhone. Регулярно сохраняй копию, особенно перед очисткой Safari.</p><button class="secondary full" data-export="1">Скачать резервную копию JSON</button></div><a href="/logout" class="muted">Выйти из приложения</a></div>'}
 function render() {
   if (activeDictation) {
     const {recognition} = activeDictation;
@@ -761,7 +844,7 @@ function showPage(next) {
   window.scrollTo(0,0);
 }
 document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.pulseZone){selectPulseZone(b);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewFinish){finishReview();return}if(b.dataset.closeWeek){closeWeek();return}if(b.dataset.reopenWeek){reopenWeek();return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
-document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
+document.addEventListener("change",e=>{let t=e.target;if(t.id==="journey-year"){journeyYear=t.value;render();return}if(t.id==="journey-sphere"){journeySphere=t.value;render();return}if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
 document.addEventListener("input",e=>{let t=e.target;
 if(t.dataset.reviewAnswer){
   const week=startWeek(weekDate);
