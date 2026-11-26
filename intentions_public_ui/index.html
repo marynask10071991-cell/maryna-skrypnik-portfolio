@@ -148,6 +148,18 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 .score-meter span{display:block;height:100%;background:var(--reflection-color);border-radius:9px}
 .reflection-card textarea{background:#fffcfe}
 @media (min-width:400px){.score-panel{padding:10px}.score-panel label{font-size:11px}}
+
+.week-review-card{background:radial-gradient(ellipse at 95% 0%,#e3f0e9,transparent 69%),#faf4f9;border-color:#e2dedf}
+.week-review-card h3{font-size:18px;margin:0 0 6px}
+.week-review-card .page-intro{font-size:13px;margin-bottom:8px}
+.week-review-card .report-toolbar{margin-bottom:0}
+.review-kicker{font-size:12px;color:var(--muted);margin:0 0 5px}
+.review-progress{width:100%;height:7px;margin:0 0 15px;accent-color:var(--plum)}
+.review-question{font-size:19px;line-height:1.28;margin:0 0 13px}
+.review-current{margin:1px 0 7px;font-size:13px;color:var(--plum)}
+.review-card .report-toolbar{margin-bottom:0}
+.review-card textarea{min-height:105px}
+@media print{.week-review-card{background:white}}
 </style></head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
 <script>
 (function(){
@@ -202,7 +214,7 @@ function weekLabel(iso) {
   const start = monday.slice(0, 7) === sunday.slice(0, 7) ? Number(monday.slice(-2)) : full(monday);
   return start + "–" + full(sunday);
 }
-let page="plan", selectedDate=localDate(), goal=2, weekDate=localDate(), monthPeriod=0;
+let page="plan", selectedDate=localDate(), goal=2, weekDate=localDate(), monthPeriod=0, reviewStep=0;
 const categoryIcons={"Здоровье и тело":"🌿","Женственность":"🌸","Отношения":"💛","Деятельность":"💼","Работа":"💼","Деньги":"💰","Уровень нормы":"✨","Окружение":"🤝","Дом и уют":"🏡"};
 const sectionsById = ids => {
   const groups = new Map();
@@ -219,7 +231,7 @@ function categoryTitle(g) {
 }
 const sectionNames=[["plan","◉","План недели"],["track","✳︎","Гипотезы"],["report","▤","Отчёт"],["progress","◷","Аналитика"]];
 function navbar() {
-  const section = page === "choose" ? "plan" : page;
+  const section = page === "choose" ? "plan" : page === "review" ? "report" : page;
   $("tabs").innerHTML = sectionNames.map(([id,icon,title]) =>
     '<button class="'+(section===id?'active':'')+'"'+(section===id?' aria-current="page"':'')+' data-nav="'+id+'"><span aria-hidden="true">'+icon+'</span>'+title+'</button>'
   ).join("");
@@ -343,11 +355,13 @@ function summarizeWeeks(weeks) {
   for (const monday of weeks) {
     const records = recordsInWeek(monday);
     const plan = plannedFor(monday);
-    for (const id of new Set([...plan, ...records.map(record => record.id)])) {
-      if (!entriesById.has(id)) entriesById.set(id,{id,planned:0,records:[]});
+    for (const id of new Set([...plan, ...records.map(record => record.id), ...Object.keys(d.weekReviews?.[monday]||{})])) {
+      if (!entriesById.has(id)) entriesById.set(id,{id,planned:0,records:[],responses:[]});
       const entry = entriesById.get(id);
       if (plan.includes(id)) entry.planned++;
       entry.records.push(...records.filter(record => record.id === id));
+      const response = d.weekReviews?.[monday]?.[id]?.trim();
+      if (response) entry.responses.push({week:monday,text:response});
     }
   }
   return entriesById;
@@ -378,10 +392,10 @@ function recordText(record, includeWhy) {
 function reportPlain(entries, includeWhy) {
   return sectionsById([...entries.keys()]).map(([g,items]) =>
     SECTIONS[g][0]+"\n"+items.map(({id,text})=>{
-      const {records,planned} = entries.get(id);
+      const {records,planned,responses} = entries.get(id);
       const zone = zoneFor(records);
       const marks = records.map(record=>dateText(record.iso)+" · "+recordText(record,includeWhy));
-      return [text+" — "+zoneNames[zone.color]+". "+zone.reason,planned ? "Недель в плане: "+planned : "",...marks].filter(Boolean).join("\n");
+      return [text+" — "+zoneNames[zone.color]+". "+zone.reason,planned ? "Недель в плане: "+planned : "",...marks,...responses.map(({week,text})=>"Ответ на итоговый вопрос ("+weekLabel(week)+"): "+text)].filter(Boolean).join("\n");
     }).join("\n\n")
   ).join("\n\n");
 }
@@ -394,7 +408,7 @@ function weekReport() {
   const diary = Array.from({length:7},(_,i)=>shift(start,i)).filter(iso=>d.days[iso]?.diary)
     .map(iso=>dateText(iso)+" · "+d.days[iso].diary).join("\n");
   const txt = ["Недельный отчёт\n"+(d.identity||"#participant")+" · "+weekLabel(start),
-    reportPlain(entries,ext.includeWhy),ext.extra,diary,scores].filter(Boolean).join("\n\n");
+    reportPlain(entries,ext.includeWhy),ext.reviewHighlight&&"Главный итог: "+ext.reviewHighlight,ext.extra,diary,scores].filter(Boolean).join("\n\n");
   return {txt,start,arr,entries};
 }
 function monthPeriods() {
@@ -402,7 +416,7 @@ function monthPeriods() {
   const thisWeek = startWeek(today);
   const dates = [...Object.keys(d.plans||{}).filter(iso=>d.plans[iso].length),
     ...Object.keys(d.days).filter(iso=>d.days[iso].items.length || d.days[iso].diary),
-    ...Object.keys(d.notes)].filter(iso=>iso<=today).sort();
+    ...Object.keys(d.notes),...Object.keys(d.weekReviews||{})].filter(iso=>iso<=today).sort();
   let first = startWeek((d.firstReportWeek && d.firstReportWeek<=thisWeek) ? d.firstReportWeek : dates[0] || thisWeek);
   if (dates[0] && dates[0]<first) first = startWeek(dates[0]);
   const periods = [];
@@ -426,14 +440,15 @@ function monthReport() {
   });
   return {period,periods,entries,byWeek};
 }
-function monthlyNotes(period) {
+function monthlyNotes(period, includeHighlights=true) {
   return period.weeks.map(week => {
     const ext = d.notes[week] || {};
     const diary = Array.from({length:7},(_,i)=>shift(week,i)).filter(iso=>d.days[iso]?.diary)
       .map(iso=>dateText(iso)+" · "+d.days[iso].diary).join("\n");
     const scores = [["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]]
       .filter(([key])=>ext[key]!=null).map(([key,title])=>title+" — "+ext[key]+"%").join(", ");
-    return [ext.extra,diary,scores].some(Boolean) ? [weekLabel(week),ext.extra,diary,scores].filter(Boolean).join("\n") : "";
+    const highlight=includeHighlights && ext.reviewHighlight && "Главный итог: "+ext.reviewHighlight;
+    return [highlight,ext.extra,diary,scores].some(Boolean) ? [weekLabel(week),highlight,ext.extra,diary,scores].filter(Boolean).join("\n") : "";
   }).filter(Boolean).join("\n\n");
 }
 const signalKeys=["green","yellow","red","unmarked"];
@@ -501,6 +516,8 @@ function monthlyVisual(byWeek,entries) {
   let finding = present.length
     ? 'Недель с отметками — '+present.length+' из 4. Выполненных действий — '+doneCount+'. Гипотез с выполнением в разные недели — '+repeated.length+'.'+(red?' В красной зоне к концу периода — '+red+'.':'')
     : 'Пока нет отметок для сравнения недель.';
+  const reviewed = [...entries.values()].reduce((sum,entry)=>sum+entry.responses.length,0);
+  if (reviewed) finding += ' Ответов в итоговых анкетах — '+reviewed+'.';
   if (present.length > 1) {
     const first = present[0], last = present[present.length-1];
     finding += ' В первую неделю с отметками выполнений — '+first.done+', в последнюю — '+last.done+'.';
@@ -514,13 +531,16 @@ function renderMonthly() {
   const {period,periods,entries,byWeek} = monthReport();
   const commentary = d.monthAnalysis?.[period.start] || "";
   const completedIndex = periods.findIndex(p=>p.finished);
-  const notes = monthlyNotes(period);
+  const notes = monthlyNotes(period,false);
+  const highlights = period.weeks.filter(week=>d.notes[week]?.reviewHighlight?.trim()).map(week=>
+    '<div class="report-entry"><b>'+weekLabel(week)+'</b><p class="report-text">'+esc(d.notes[week].reviewHighlight.trim())+'</p></div>'
+  ).join("");
   return '<section class="card monthly-report"><h3>Отчёт за четыре недели</h3><p class="muted">'+periodTitle(period)+'</p>'+
     '<div class="no-print">'+(periods.length>1 ? '<label for="month-period">Период</label><select class="field" id="month-period">'+
       periods.map((p,i)=>'<option value="'+i+'"'+(i===monthPeriod?' selected':'')+'>'+periodTitle(p)+'</option>').join("")+'</select>' : '')+
     (!period.finished?'<p class="muted">Завершено недель: '+period.closed+' из 4.</p>':'')+
     (!period.finished && completedIndex>=0 ? '<button class="secondary full" data-view-period="'+completedIndex+'">Открыть готовый отчёт · '+periodTitle(periods[completedIndex])+'</button>' : '')+'</div>'+
-    monthlyVisual(byWeek,entries)+
+    monthlyVisual(byWeek,entries)+(highlights?'<section class="card"><h3>Главные итоги по неделям</h3>'+highlights+'</section>':'')+
     (notes ? '<details class="card report-details no-print"><summary>Заметки и самооценка по неделям</summary><div class="report-text">'+esc(notes)+'</div></details>' : '')+
     '<div class="no-print"><div class="report-toolbar"><button class="secondary" data-copy-analysis="month">Скопировать для ChatGPT</button>'+
     '<button class="primary" data-print="month">Сохранить PDF</button></div>'+
@@ -528,7 +548,7 @@ function renderMonthly() {
     '<section id="printed-analysis" class="hidden"><h3>Разбор ChatGPT</h3><div class="report-text"></div></section></section>';
 }
 function analysisPrompt(monthly) {
-  const instruction = "Проанализируй мои гипотезы по сферам. По каждой покажи, что я сделала, какие изменения я описала и что повторяется или не получается. Объясни зелёную, жёлтую и красную зоны, опираясь на записи. Отдельно укажи, где данных мало. Не считай отсутствие отметки невыполнением. Не придумывай результатов. Пиши простыми словами.";
+  const instruction = "Проанализируй мои гипотезы по сферам. По каждой покажи, что я сделала, какие изменения я описала и что повторяется или не получается. Используй ответы на итоговые вопросы, чтобы выделить фактические изменения и причины трудностей. Объясни зелёную, жёлтую и красную зоны, опираясь на записи. Отдельно укажи, где данных мало. Не считай отсутствие отметки невыполнением. Не придумывай результатов. Пиши простыми словами.";
   if (!monthly) return instruction+"\n\n"+weekReport().txt;
   const {period,entries,byWeek} = monthReport();
   const weeks = byWeek.map(({week,planned,done,partial,post})=>weekLabel(week)+": в плане "+planned+", сделано "+done+", частично "+partial+", переносов "+post).join("\n");
@@ -582,11 +602,82 @@ function reflectionCard(ext) {
     '<div class="score-grid">'+scores+'</div><label for="report-extra">Что запомнилось на этой неделе?</label>'+
     '<textarea class="field" id="report-extra" rows="3" placeholder="Мысль, открытие или просто момент для себя">'+esc(ext.extra)+'</textarea></section>';
 }
+const reviewPrompts = {
+  done:"Что изменилось после того, как ты это сделала?",
+  partial:"Что получилось и что помешало довести до конца?",
+  post:"Что помешало сделать это на этой неделе?",
+  none:"Что было с этой гипотезой на неделе?"
+};
+function reviewQuestions(report) {
+  return [...report.entries.values()].map(entry=>{
+    const marked = entry.records.filter(record=>record.status!=="none");
+    const last = marked[marked.length-1];
+    const {g,text} = labelFor(entry.id);
+    return {id:entry.id,g,text,status:last?.status||"none",hasContext:Boolean(last?.note||last?.reason||last?.difference),answer:entry.responses[0]?.text||""};
+  }).sort((a,b)=>Number(a.status==="none")-Number(b.status==="none")||Number(a.hasContext)-Number(b.hasContext));
+}
+function reviewCard(report) {
+  const questions = reviewQuestions(report);
+  if (!questions.length) return "";
+  const answered = questions.filter(question=>question.answer);
+  const resultSpheres = new Set(answered.filter(question=>question.status==="done").map(question=>question.g)).size;
+  const barriers = answered.filter(question=>question.status==="partial"||question.status==="post").length;
+  const summary = answered.length
+    ? 'Ответов: '+answered.length+' из '+questions.length+'.'+(resultSpheres?' Сфер с описанным результатом: '+resultSpheres+'.':'')+(barriers?' Уточнений о препятствиях: '+barriers+'.':'')
+    : 'Пара коротких вопросов о том, что получилось и что помешало. Можно ответить голосом.';
+  const highlight = d.notes[report.start]?.reviewHighlight?.trim();
+  return '<section class="card week-review-card"><h3>Итоги недели</h3><p class="page-intro">'+esc(summary)+'</p>'+
+    (highlight?'<div class="story"><h3>Главный итог</h3><p class="report-text">'+esc(highlight)+'</p></div>':'')+
+    '<div class="report-toolbar"><button class="primary" data-review-week="'+report.start+'">'+(answered.length===questions.length&&highlight?'Посмотреть ответы':answered.length?'Продолжить анкету':'Ответить на вопросы')+'</button></div></section>';
+}
+function renderReview() {
+  const report = weekReport();
+  const questions = reviewQuestions(report);
+  if (reviewStep===questions.length && questions.length) {
+    const highlight = d.notes[report.start]?.reviewHighlight || "";
+    return '<h2 class="page-title">Итоги недели</h2><p class="review-kicker">'+weekLabel(report.start)+'</p>'+
+      '<section class="card review-card"><h3 class="review-question">Какой главный итог недели хочешь запомнить?</h3>'+
+      '<p class="page-intro">Можно назвать одно изменение или то, что хочешь попробовать на следующей неделе. Этот ответ появится в отчёте отдельно.</p>'+
+      '<div class="note-heading"><label for="review-highlight">Главный итог</label><button type="button" class="dictation" data-dictate="review-highlight">🎙 Диктовать</button></div>'+
+      '<textarea class="field" id="review-highlight" rows="4" placeholder="Например, договариваться заранее оказалось проще">'+esc(highlight)+'</textarea>'+
+      '<p class="voice-status" id="review-highlight-status" role="status"></p>'+
+      '<div class="report-toolbar"><button class="secondary" data-review-move="-1">Назад</button><button class="primary" data-goto="report">Посмотреть отчёт</button></div></section>';
+  }
+  const question = questions[reviewStep];
+  if (!question) return renderReport();
+  const status = question.status==="none" ? "Пока без отметки" : answerNames[question.status];
+  const next = question.answer ? "Дальше" : "Пропустить";
+  return '<h2 class="page-title">Итоги недели</h2><p class="review-kicker">Вопрос '+(reviewStep+1)+' из '+questions.length+' · '+weekLabel(report.start)+'</p>'+
+    '<progress class="review-progress" aria-label="Номер вопроса" value="'+(reviewStep+1)+'" max="'+questions.length+'"></progress>'+
+    '<section class="card review-card"><p class="review-current">'+categoryTitle(question.g)+' · '+status+'</p><h3>'+esc(question.text)+'</h3>'+
+    '<p class="review-question" id="review-prompt">'+reviewPrompts[question.status]+'</p>'+
+    '<div class="note-heading"><label for="review-answer">Твой ответ</label><button type="button" class="dictation" data-dictate="review-answer">🎙 Диктовать</button></div>'+
+    '<textarea class="field" id="review-answer" aria-describedby="review-prompt" data-review-answer="'+esc(question.id)+'" rows="4" placeholder="Расскажи своими словами">'+esc(question.answer)+'</textarea>'+
+    '<p class="voice-status" id="review-answer-status" role="status"></p>'+
+    '<div class="report-toolbar">'+(reviewStep>0?'<button class="secondary" data-review-move="-1">Назад</button>':'')+
+    '<button class="primary" data-review-move="1" id="review-next">'+next+'</button></div></section>'+
+    '<button class="secondary full" data-goto="report">Посмотреть отчёт</button>';
+}
+function openReview(monday) {
+  weekDate = monday;
+  const questions = reviewQuestions(weekReport());
+  const pending = questions.findIndex(question=>!question.answer);
+  reviewStep = pending>=0 ? pending : d.notes[monday]?.reviewHighlight?.trim() ? 0 : questions.length;
+  showPage("review");
+}
+function moveReview(step) {
+  if (activeDictation) { activeDictation.recognition.stop(); return; }
+  reviewStep += step;
+  if (reviewStep > reviewQuestions(weekReport()).length) showPage("report");
+  else { render();window.scrollTo(0,0); }
+}
 function renderReport() {
   const report = weekReport();
   const ext = d.notes[report.start] || {};
   return '<h2 class="page-title">Отчёт недели</h2><div class="report-period"><span>'+weekLabel(report.start)+'</span><input id="week-date" type="date" aria-label="Выбрать неделю отчёта" class="field" style="width:auto" value="'+weekDate+'"></div>'+
-    weekVisual(report)+visitVisual(report.start)+reflectionCard(ext)+
+    weekVisual(report)+visitVisual(report.start)+reviewCard(report)+reflectionCard(ext)+
+    (report.start===startWeek(localDate()) && summarizeWeeks([shift(report.start,-7)]).size
+      ? '<button class="secondary full" data-review-week="'+shift(report.start,-7)+'">Анкета за прошлую неделю</button>' : '')+
     '<label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Добавить причины переносов в разбор ChatGPT</label>'+
     '<div class="report-toolbar"><button class="secondary" data-copy-analysis="week">Скопировать для ChatGPT</button></div>';
 }
@@ -601,7 +692,8 @@ function render() {
   $("main").innerHTML = page === "plan" ? renderPlan() :
     page === "choose" ? renderChoose() :
     page === "track" ? renderTrack() :
-    page === "report" ? renderReport() : renderProgress();
+    page === "report" ? renderReport() :
+    page === "review" ? renderReview() : renderProgress();
 }
 function showPage(next) {
   markVisit();
@@ -610,9 +702,26 @@ function showPage(next) {
   render();
   window.scrollTo(0,0);
 }
-document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
+document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
 document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
 document.addEventListener("input",e=>{let t=e.target;
+if(t.dataset.reviewAnswer){
+  const week=startWeek(weekDate);
+  const reviews=(d.weekReviews||={});
+  const answer=t.value;
+  if (answer.trim()) (reviews[week]||={})[t.dataset.reviewAnswer]=answer;
+  else if (reviews[week]) {
+    delete reviews[week][t.dataset.reviewAnswer];
+    if (!Object.keys(reviews[week]).length) delete reviews[week];
+  }
+  const next=$("review-next");
+  next.textContent=answer.trim()?"Дальше":"Пропустить";
+  save();
+}
+if(t.id==="review-highlight"){
+  (d.notes[startWeek(weekDate)]||={}).reviewHighlight=t.value;
+  save();
+}
 if(t.dataset.score){
   const key=t.dataset.score;
   const notes=d.notes[startWeek(weekDate)] ||= {};
