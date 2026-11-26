@@ -24,8 +24,11 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 .week-plan h2{font-size:28px;letter-spacing:-.9px;margin:0}
 .week-range{display:block;color:var(--muted);font-size:13px;margin:5px 0 15px}
 .week-plan p{margin:0 0 10px;max-width:32ch}
-.plan-list{padding:0;margin:0 0 10px;list-style:none}
-.plan-list li{display:flex;align-items:baseline;gap:9px;padding:7px 0;overflow-wrap:anywhere}
+.plan-group{margin-bottom:12px}
+.plan-group + .plan-group{border-top:1px solid #dfcfe0;padding-top:10px}
+.plan-group h3{margin:0 0 3px;color:var(--plum);font-size:14px}
+.plan-list{padding:0;margin:0;list-style:none}
+.plan-list li{display:flex;align-items:baseline;gap:9px;padding:4px 0;line-height:1.35;overflow-wrap:anywhere}
 .plan-list li::before{content:"";display:inline-block;flex:0 0 6px;height:6px;border-radius:50%;background:var(--plum)}
 .week-plan .primary{min-height:45px;margin-top:3px}
 .day-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
@@ -96,8 +99,17 @@ function navbar(){$("tabs").innerHTML=sectionNames.map(x=>'<button class="'+(pag
 function dayCard(iso){let a=d.days[iso]||{items:[],answers:{},diary:""},plan=plannedFor(iso),visible=[...new Set([...plan,...a.items])];return '<div class="card day-log">'+ (visible.length?visible.map(id=>{let h=labelFor(id),v=a.answers[id]||{},cnt=Object.keys(d.days).filter(when=>d.days[when].answers[id]?.status==="post").length,prior=Object.keys(d.days).filter(when=>when<iso&&d.days[when].answers[id]?.status==="done").sort(),last=prior.length?d.days[prior[prior.length-1]].answers[id]:null,completedCount=prior.length+(v.status==="done"?1:0),stalled=prior.length>=2&&v.progress==="no";return '<div class="card" style="box-shadow:none"><div class="muted">'+esc(SECTIONS[h.g][0])+'</div><h3>'+esc(h.text)+'</h3><div class="row" style="justify-content:flex-start;flex-wrap:wrap">'+[["done","✓ Сделано"],["partial","Частично"],["post","Отложила"]].map(x=>'<button class="chip '+(v.status===x[0]?'active':'')+'" data-state="'+esc(id)+'" data-val="'+x[0]+'">'+x[1]+'</button>').join("")+'</div><label>'+(v.status==="done"?"Что именно сделано?":v.status==="partial"?"Что удалось сделать частично?":"Комментарий (необязательно)")+'</label><textarea class="field" rows="2" data-comment="'+esc(id)+'" placeholder="'+(v.status==="done"?"Опиши конкретный результат, например: подготовила и опубликовала пост":v.status==="partial"?"Что уже получилось?":"Мои впечатления и наблюдения")+'">'+esc(v.note)+'</textarea>'+(v.status==="done"&&last?'<div class="notice"><b>Прошлый результат:</b> '+esc(last.note||"Отмечено без комментария")+'</div><label>Что изменилось по сравнению с прошлой попыткой?</label><textarea class="field" rows="2" data-difference="'+esc(id)+'" placeholder="В чём новый результат или отличие?">'+esc(v.difference)+'</textarea><label>Есть продвижение к намерению?</label><select class="field" data-progress="'+esc(id)+'"><option value="" '+(!v.progress?'selected':'')+'>Пока не оценила</option><option value="yes" '+(v.progress==='yes'?'selected':'')+'>Да, есть новый результат</option><option value="same" '+(v.progress==='same'?'selected':'')+'>Поддерживаю результат / полезная привычка</option><option value="no" '+(v.progress==='no'?'selected':'')+'>Нет, всё повторяется без продвижения</option></select>' :'')+(stalled?'<div class="notice"><b>Пора пересмотреть подход.</b> Ты отмечала выполнение минимум три раза, но сейчас не видишь продвижения. Можно изменить действие или обсудить ситуацию с ментором.</div>':'')+(v.status==="post"?'<label>Почему отложила?</label><textarea class="field" rows="2" data-reason="'+esc(id)+'" placeholder="Что помешало?">'+esc(v.reason)+'</textarea>':'')+(cnt>=3?'<div class="notice">Гипотеза переносилась '+cnt+' раза. Возможно, стоит изменить шаг или подход.</div>':'')+(plan.includes(id)?'':'<button class="link" data-remove="'+esc(id)+'">Убрать из этого дня</button>')+'</div>'}).join(""):'')+'<label for="day-diary">Заметка о дне</label><textarea class="field" id="day-diary" data-diary rows="2" placeholder="Что сегодня произошло?">'+esc(a.diary)+'</textarea></div>'}
 function renderToday() {
   const items = plannedFor(selectedDate);
+  const groups = new Map();
+  for (const id of items) {
+    const { g, text } = labelFor(id);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(text);
+  }
   const list = items.length
-    ? '<ul class="plan-list">' + items.map(id => '<li>' + esc(labelFor(id).text) + '</li>').join("") + '</ul>'
+    ? [...groups].sort(([a], [b]) => a - b).map(([g, entries]) =>
+      '<div class="plan-group"><h3>' + esc(SECTIONS[g][0]) + '</h3><ul class="plan-list">' +
+      entries.map(text => '<li>' + esc(text) + '</li>').join("") + '</ul></div>'
+    ).join("")
     : '<p class="muted small">Выбери, что хочешь попробовать на этой неделе.</p>';
   const title = selectedDate === localDate() ? "Сегодня" : dateText(selectedDate);
   return '<section class="card week-plan" aria-labelledby="plan-title">' +
