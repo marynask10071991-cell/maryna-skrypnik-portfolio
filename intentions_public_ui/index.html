@@ -159,7 +159,7 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 .review-current{margin:1px 0 7px;font-size:13px;color:var(--plum)}
 .review-card .report-toolbar{margin-bottom:0}
 .review-card textarea{min-height:105px}
-.review-card button:disabled{opacity:.42;cursor:default}
+.review-card button:disabled,.week-review-card button:disabled{opacity:.42;cursor:default}
 @media print{.week-review-card{background:white}}
 </style></head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
 <script>
@@ -614,8 +614,15 @@ function reviewQuestions(report) {
     const marked = entry.records.filter(record=>record.status!=="none");
     const last = marked[marked.length-1];
     const {g,text} = labelFor(entry.id);
-    return {id:entry.id,g,text,status:last?.status||"none",hasContext:Boolean(last?.note||last?.reason||last?.difference),answer:entry.responses[0]?.text||"",skipped:Boolean(d.weekReviewSkipped?.[report.start]?.includes(entry.id))};
+    return {id:entry.id,g,text,status:last?.status||"none",hasContext:Boolean(last?.note||last?.reason||last?.difference),answer:entry.responses[0]?.text||""};
   }).sort((a,b)=>Number(a.status==="none")-Number(b.status==="none")||Number(a.hasContext)-Number(b.hasContext));
+}
+function reviewCompletion(report, questions) {
+  const highlight = d.notes[report.start]?.reviewHighlight?.trim();
+  const ready = Boolean(highlight) && questions.length>0 && questions.every(question=>question.answer);
+  const submitted = d.closedWeeks?.[report.start];
+  const closed = ready && submitted?.ids.length===questions.length && questions.every(question=>submitted.ids.includes(question.id));
+  return {highlight,ready,closed};
 }
 function reviewCard(report) {
   const questions = reviewQuestions(report);
@@ -626,12 +633,15 @@ function reviewCard(report) {
   const summary = answered.length
     ? 'Ответов: '+answered.length+' из '+questions.length+'.'+(resultSpheres?' Сфер с описанным результатом: '+resultSpheres+'.':'')+(barriers?' Уточнений о препятствиях: '+barriers+'.':'')
     : 'Пара коротких вопросов о том, что получилось и что помешало. Можно ответить голосом.';
-  const notes = d.notes[report.start] || {};
-  const highlight = notes.reviewHighlight?.trim();
-  const complete = questions.every(question=>question.answer||question.skipped) && (highlight||notes.reviewHighlightSkipped);
+  const {highlight,ready,closed} = reviewCompletion(report,questions);
+  const actions = closed
+    ? '<p class="notice" role="status">Отчёт сдан. Неделя закрыта.</p><button class="secondary" data-reopen-week="1">Открыть неделю для правки</button>'
+    : '<div class="report-toolbar"><button class="'+(ready?'secondary':'primary')+'" data-review-week="'+report.start+'">'+
+      (ready?'Проверить ответы':answered.length?'Продолжить анкету':'Ответить на вопросы')+'</button>'+
+      '<button class="primary" data-close-week="1" '+(ready?'':'disabled')+'>Сдать отчёт и закрыть неделю</button></div>'+
+      (!ready?'<p class="muted">Для сдачи ответь на все вопросы и заполни главный итог.</p>':'');
   return '<section class="card week-review-card"><h3>Итоги недели</h3><p class="page-intro">'+esc(summary)+'</p>'+
-    (highlight?'<div class="story"><h3>Главный итог</h3><p class="report-text">'+esc(highlight)+'</p></div>':'')+
-    '<div class="report-toolbar"><button class="primary" data-review-week="'+report.start+'">'+(complete?'Открыть анкету':questions.some(question=>question.answer||question.skipped)?'Продолжить анкету':'Ответить на вопросы')+'</button></div></section>';
+    (highlight?'<div class="story"><h3>Главный итог</h3><p class="report-text">'+esc(highlight)+'</p></div>':'')+actions+'</section>';
 }
 function renderReview() {
   const report = weekReport();
@@ -644,7 +654,7 @@ function renderReview() {
       '<div class="note-heading"><label for="review-highlight">Главный итог</label><button type="button" class="dictation" data-dictate="review-highlight">🎙 Диктовать</button></div>'+
       '<textarea class="field" id="review-highlight" rows="4" placeholder="Например, договариваться заранее оказалось проще">'+esc(highlight)+'</textarea>'+
       '<p class="voice-status" id="review-highlight-status" role="status"></p>'+
-      '<div class="report-toolbar"><button class="secondary" data-review-move="-1">Назад</button><button class="secondary" data-review-skip="highlight">Пропустить итог</button><button class="primary" data-goto="report">Посмотреть отчёт</button></div></section>';
+      '<div class="report-toolbar"><button class="secondary" data-review-move="-1">Назад</button><button class="primary" data-review-finish="1" id="review-finish" '+(highlight.trim()?'':'disabled')+'>К отчёту</button></div></section>';
   }
   const question = questions[reviewStep];
   if (!question) return renderReport();
@@ -657,40 +667,48 @@ function renderReview() {
     '<textarea class="field" id="review-answer" aria-describedby="review-prompt" data-review-answer="'+esc(question.id)+'" rows="4" placeholder="Расскажи своими словами">'+esc(question.answer)+'</textarea>'+
     '<p class="voice-status" id="review-answer-status" role="status"></p>'+
     '<div class="report-toolbar">'+(reviewStep>0?'<button class="secondary" data-review-move="-1">Назад</button>':'')+
-    '<button class="secondary" data-review-skip="question">Пропустить</button>'+
     '<button class="primary" data-review-move="1" id="review-next" '+(question.answer?'':'disabled')+'>Дальше</button></div></section>'+
-    '<button class="secondary full" data-goto="report">Посмотреть отчёт</button>';
+    '<button class="secondary full" data-goto="report">К черновику отчёта</button>';
 }
 function openReview(monday) {
   weekDate = monday;
-  const questions = reviewQuestions(weekReport());
-  const pending = questions.findIndex(question=>!question.answer&&!question.skipped);
-  const notes = d.notes[monday] || {};
-  reviewStep = pending>=0 ? pending : (notes.reviewHighlight?.trim()||notes.reviewHighlightSkipped) ? 0 : questions.length;
+  const report = weekReport();
+  const questions = reviewQuestions(report);
+  const {closed,highlight} = reviewCompletion(report,questions);
+  if (closed) { showPage("report"); return; }
+  const pending = questions.findIndex(question=>!question.answer);
+  reviewStep = pending>=0 ? pending : highlight ? 0 : questions.length;
   showPage("review");
 }
 function moveReview(step) {
   if (activeDictation) { activeDictation.recognition.stop(); return; }
-  reviewStep += step;
-  if (reviewStep > reviewQuestions(weekReport()).length) showPage("report");
-  else { render();window.scrollTo(0,0); }
+  const questions = reviewQuestions(weekReport());
+  if (step>0 && !questions[reviewStep]?.answer) return;
+  reviewStep = Math.max(0,reviewStep+step);
+  render();
+  window.scrollTo(0,0);
 }
-function skipReview(kind) {
+function finishReview() {
   if (activeDictation) { activeDictation.recognition.stop(); return; }
   const report = weekReport();
-  if (kind==="highlight") {
-    (d.notes[report.start]||={}).reviewHighlightSkipped=true;
+  if (reviewCompletion(report,reviewQuestions(report)).ready) showPage("report");
+}
+function closeWeek() {
+  const report = weekReport();
+  const questions = reviewQuestions(report);
+  const {ready,closed} = reviewCompletion(report,questions);
+  if (!ready || closed) return;
+  (d.closedWeeks||={})[report.start] = {at:new Date().toISOString(),ids:questions.map(question=>question.id)};
+  save();
+  render();
+}
+function reopenWeek() {
+  const monday = startWeek(weekDate);
+  if (d.closedWeeks?.[monday]) {
+    delete d.closedWeeks[monday];
     save();
-    showPage("report");
-    return;
   }
-  const question = reviewQuestions(report)[reviewStep];
-  if (question && !question.answer && !question.skipped) {
-    const skipped = d.weekReviewSkipped ||= {};
-    (skipped[report.start]||=[]).push(question.id);
-    save();
-  }
-  moveReview(1);
+  openReview(monday);
 }
 function renderReport() {
   const report = weekReport();
@@ -723,7 +741,7 @@ function showPage(next) {
   render();
   window.scrollTo(0,0);
 }
-document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewSkip){skipReview(b.dataset.reviewSkip);return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
+document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewFinish){finishReview();return}if(b.dataset.closeWeek){closeWeek();return}if(b.dataset.reopenWeek){reopenWeek();return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
 document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
 document.addEventListener("input",e=>{let t=e.target;
 if(t.dataset.reviewAnswer){
@@ -741,6 +759,7 @@ if(t.dataset.reviewAnswer){
 }
 if(t.id==="review-highlight"){
   (d.notes[startWeek(weekDate)]||={}).reviewHighlight=t.value;
+  $("review-finish").disabled=!t.value.trim();
   save();
 }
 if(t.dataset.score){
