@@ -31,23 +31,54 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 .plan-list li{display:flex;align-items:baseline;gap:9px;padding:4px 0;line-height:1.35;overflow-wrap:anywhere}
 .plan-list li::before{content:"";display:inline-block;flex:0 0 6px;height:6px;border-radius:50%;background:var(--plum)}
 .week-plan .primary{min-height:45px;margin-top:3px}
-.day-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
-.day-heading h2{font-size:19px;margin:0}
-.day-heading .field{width:130px;min-width:0;min-height:42px;margin:0;padding:7px;font-size:14px;background:#fff}
-.week{gap:5px;margin-bottom:12px}
-.day{display:grid;place-items:center;align-content:center;gap:2px;min-width:0;min-height:53px;padding:5px 1px;border-radius:11px;background:#fff;color:var(--muted)}
-.day b{font-size:15px;color:var(--ink)}
-.day.active{background:var(--plum);border-color:var(--plum);color:white}
-.day.active b{color:white}
-.day-dot{width:4px;height:4px;border-radius:50%;background:transparent}
-.day-dot.has-entry{background:currentColor}
-.day-log{padding:14px}
-.day-log > .card{background:#fcfafc;border-radius:14px;margin-bottom:9px;padding:13px;overflow-wrap:anywhere}
-.day-log label{color:var(--muted)}
-.day-log > label{margin:0;font-size:14px;color:var(--ink)}
-.day-log > .field{margin-bottom:0}
 .field:is(textarea,input,select){font-size:16px}
 @media (max-width:360px){.wrap{padding-inline:12px}header{padding-inline:12px}.week{gap:3px}}
+
+.page-title{font-size:28px;line-height:1.12;letter-spacing:-.8px;margin:4px 0 7px}
+.page-intro{margin:0 0 15px;color:var(--muted);font-size:14px}
+.week-plan{background:#f6eef5}
+.plan-group{background:#fffafde0;border:1px solid #ebdfe9;border-radius:13px;padding:10px 12px}
+.plan-group + .plan-group{border-top:1px solid #ebdfe9;padding-top:10px}
+.plan-group h3,.tracking-group h3{display:flex;align-items:center;gap:7px}
+.category-icon{display:inline-grid;place-items:center;width:24px;height:24px;flex:none;font-size:15px}
+.tracking-group{margin-bottom:18px}
+.tracking-group h3{font-size:16px;margin:0 0 8px;color:var(--plum)}
+.tracking-card h4{font-size:16px;line-height:1.35;margin:0 0 8px;overflow-wrap:anywhere}
+.tracking-card .counts{font-size:12px;color:var(--muted);margin:0 0 10px}
+.statuses{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.statuses .chip{min-height:40px}
+.note-heading{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.note-heading label{margin:0}
+.dictation{min-height:44px;white-space:nowrap;padding:7px 9px;border:0;border-radius:9px;background:var(--soft);color:var(--plum);font-size:12px;font-weight:700}
+.voice-status{margin:0;font-size:12px;color:var(--muted)}
+.voice-status:empty{display:none}
+.report-period{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.report-period .chip{min-height:44px}
+.zone-mark{display:inline-block;font-size:11px;font-weight:750;padding:4px 8px;border-radius:9px;margin:0 0 6px;line-height:1.35}
+.zone-green{background:#e5f3e9;color:#205636}
+.zone-yellow{background:#fff1cc;color:#694703}
+.zone-red{background:#fae6e7;color:#842936}
+.zone-unmarked{background:#f0edf2;color:#5e5363}
+.report-toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.report-toolbar button,.report-toolbar a{min-height:44px;display:inline-flex;align-items:center;text-decoration:none}
+.report-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.print-only{display:none}
+@media print{.print-only{display:block}}
+@media print{.zone-mark{border:1px solid currentColor;background:none}.monthly-report .report-zone{border-color:#ccc}}
+.report-zone{padding:12px 0;border-top:1px solid var(--border)}
+.report-zone h3{margin-bottom:5px;color:var(--plum)}
+.report-entry{margin:7px 0 11px;padding-left:10px;border-left:2px solid var(--border);overflow-wrap:anywhere}
+.report-entry p{margin:4px 0}
+.report-entry ul{padding-left:16px;margin:5px 0}
+.report-entry li{margin:5px 0}
+@media print{
+  body{background:white;padding:0;color:#222;font-size:11pt}
+  header,.tabs,.no-print{display:none!important}
+  .wrap{max-width:none;padding:0}
+  .monthly-report{border:0;padding:0}
+  .report-entry{break-inside:avoid}
+  .report-zone h3{break-after:avoid}
+}
 </style></head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
 <script>
 (function(){
@@ -72,6 +103,7 @@ function updateWeekPlan(id) {
   const ids = plannedFor(selectedDate);
   const next = ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id];
   (d.plans ||= {})[monday] = next;
+  if (!d.firstReportWeek || monday < d.firstReportWeek) d.firstReportWeek = monday;
   save();
   $("selected-count").textContent = String(next.length);
   document.querySelectorAll("[data-add]").forEach(button => {
@@ -93,53 +125,321 @@ function weekLabel(iso) {
   const start = monday.slice(0, 7) === sunday.slice(0, 7) ? Number(monday.slice(-2)) : full(monday);
   return start + "–" + full(sunday);
 }
-let page="today",selectedDate=localDate(),goal=2,weekDate=localDate();
-const sectionNames=[["today","◉","Сегодня"],["choose","✳︎","Гипотезы"],["calendar","▦","Календарь"],["report","▤","Отчёт"],["progress","◷","Аналитика"]];
-function navbar(){$("tabs").innerHTML=sectionNames.map(x=>'<button class="'+(page===x[0]?'active':'')+'"'+(page===x[0]?' aria-current="page"':'')+' data-nav="'+x[0]+'"><span aria-hidden="true">'+x[1]+'</span>'+x[2]+'</button>').join("")}
-function dayCard(iso){let a=d.days[iso]||{items:[],answers:{},diary:""},plan=plannedFor(iso),visible=[...new Set([...plan,...a.items])];return '<div class="card day-log">'+ (visible.length?visible.map(id=>{let h=labelFor(id),v=a.answers[id]||{},cnt=Object.keys(d.days).filter(when=>d.days[when].answers[id]?.status==="post").length,prior=Object.keys(d.days).filter(when=>when<iso&&d.days[when].answers[id]?.status==="done").sort(),last=prior.length?d.days[prior[prior.length-1]].answers[id]:null,completedCount=prior.length+(v.status==="done"?1:0),stalled=prior.length>=2&&v.progress==="no";return '<div class="card" style="box-shadow:none"><div class="muted">'+esc(SECTIONS[h.g][0])+'</div><h3>'+esc(h.text)+'</h3><div class="row" style="justify-content:flex-start;flex-wrap:wrap">'+[["done","✓ Сделано"],["partial","Частично"],["post","Отложила"]].map(x=>'<button class="chip '+(v.status===x[0]?'active':'')+'" data-state="'+esc(id)+'" data-val="'+x[0]+'">'+x[1]+'</button>').join("")+'</div><label>'+(v.status==="done"?"Что именно сделано?":v.status==="partial"?"Что удалось сделать частично?":"Комментарий (необязательно)")+'</label><textarea class="field" rows="2" data-comment="'+esc(id)+'" placeholder="'+(v.status==="done"?"Опиши конкретный результат, например: подготовила и опубликовала пост":v.status==="partial"?"Что уже получилось?":"Мои впечатления и наблюдения")+'">'+esc(v.note)+'</textarea>'+(v.status==="done"&&last?'<div class="notice"><b>Прошлый результат:</b> '+esc(last.note||"Отмечено без комментария")+'</div><label>Что изменилось по сравнению с прошлой попыткой?</label><textarea class="field" rows="2" data-difference="'+esc(id)+'" placeholder="В чём новый результат или отличие?">'+esc(v.difference)+'</textarea><label>Есть продвижение к намерению?</label><select class="field" data-progress="'+esc(id)+'"><option value="" '+(!v.progress?'selected':'')+'>Пока не оценила</option><option value="yes" '+(v.progress==='yes'?'selected':'')+'>Да, есть новый результат</option><option value="same" '+(v.progress==='same'?'selected':'')+'>Поддерживаю результат / полезная привычка</option><option value="no" '+(v.progress==='no'?'selected':'')+'>Нет, всё повторяется без продвижения</option></select>' :'')+(stalled?'<div class="notice"><b>Пора пересмотреть подход.</b> Ты отмечала выполнение минимум три раза, но сейчас не видишь продвижения. Можно изменить действие или обсудить ситуацию с ментором.</div>':'')+(v.status==="post"?'<label>Почему отложила?</label><textarea class="field" rows="2" data-reason="'+esc(id)+'" placeholder="Что помешало?">'+esc(v.reason)+'</textarea>':'')+(cnt>=3?'<div class="notice">Гипотеза переносилась '+cnt+' раза. Возможно, стоит изменить шаг или подход.</div>':'')+(plan.includes(id)?'':'<button class="link" data-remove="'+esc(id)+'">Убрать из этого дня</button>')+'</div>'}).join(""):'')+'<label for="day-diary">Заметка о дне</label><textarea class="field" id="day-diary" data-diary rows="2" placeholder="Что сегодня произошло?">'+esc(a.diary)+'</textarea></div>'}
-function renderToday() {
-  const items = plannedFor(selectedDate);
+let page="plan", selectedDate=localDate(), goal=2, weekDate=localDate(), monthPeriod=0;
+const categoryIcons={"Здоровье и тело":"🌿","Женственность":"🌸","Отношения":"💛","Деятельность":"💼","Работа":"💼","Деньги":"💰","Уровень нормы":"✨","Окружение":"🤝","Дом и уют":"🏡"};
+const sectionsById = ids => {
   const groups = new Map();
-  for (const id of items) {
-    const { g, text } = labelFor(id);
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(text);
+  for (const id of ids) {
+    const entry = labelFor(id);
+    if (!groups.has(entry.g)) groups.set(entry.g, []);
+    groups.get(entry.g).push({id, text:entry.text});
   }
-  const list = items.length
-    ? [...groups].sort(([a], [b]) => a - b).map(([g, entries]) =>
-      '<div class="plan-group"><h3>' + esc(SECTIONS[g][0]) + '</h3><ul class="plan-list">' +
-      entries.map(text => '<li>' + esc(text) + '</li>').join("") + '</ul></div>'
+  return [...groups].sort(([a],[b]) => a-b);
+};
+function categoryTitle(g) {
+  const name = SECTIONS[g][0];
+  return '<span class="category-icon" aria-hidden="true">'+(categoryIcons[name] || "✦")+'</span>'+esc(name);
+}
+const sectionNames=[["plan","◉","План недели"],["track","✳︎","Гипотезы"],["report","▤","Отчёт"],["progress","◷","Аналитика"]];
+function navbar() {
+  const section = page === "choose" ? "plan" : page;
+  $("tabs").innerHTML = sectionNames.map(([id,icon,title]) =>
+    '<button class="'+(section===id?'active':'')+'"'+(section===id?' aria-current="page"':'')+' data-nav="'+id+'"><span aria-hidden="true">'+icon+'</span>'+title+'</button>'
+  ).join("");
+}
+function renderPlan() {
+  const groups = sectionsById(plannedFor(selectedDate));
+  const list = groups.length
+    ? groups.map(([g, entries]) =>
+      '<section class="plan-group"><h3>' + categoryTitle(g) + '</h3><ul class="plan-list">' +
+      entries.map(({text}) => '<li>' + esc(text) + '</li>').join("") + '</ul></section>'
     ).join("")
-    : '<p class="muted small">Выбери, что хочешь попробовать на этой неделе.</p>';
-  const title = selectedDate === localDate() ? "Сегодня" : dateText(selectedDate);
+    : '<p class="page-intro">Выбери, что хочешь попробовать на этой неделе.</p>';
   return '<section class="card week-plan" aria-labelledby="plan-title">' +
     '<h2 id="plan-title">План недели</h2><span class="week-range">' + weekLabel(selectedDate) + '</span>' + list +
-    '<button class="primary full" data-goto="choose">' + (items.length ? "Изменить план" : "+ Выбрать гипотезы") + '</button></section>' +
-    '<div class="day-heading"><h2>' + title + '</h2><input id="date-field" type="date" aria-label="Выбрать день" value="' + selectedDate + '" class="field"></div>' +
-    weekPicker(selectedDate) + dayCard(selectedDate);
+    '<button class="primary full" data-goto="choose">' + (groups.length ? "Изменить план" : "+ Выбрать гипотезы") + '</button></section>';
 }
-function weekPicker(iso) {
-  const monday = startWeek(iso);
-  return '<div class="week">' + Array.from({length:7}, (_, i) => {
-    const date = shift(monday, i);
-    const entry = d.days[date];
-    const hasEntry = entry?.items.length || entry?.diary;
-    const active = date === selectedDate;
-    return '<button class="day ' + (active ? 'active' : '') + '" aria-pressed="' + active + '" data-date="' + date + '">' +
-      ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][i] + '<b>' + Number(date.slice(-2)) + '</b>' +
-      '<span class="day-dot' + (hasEntry ? ' has-entry' : '') + '" aria-hidden="true"></span></button>';
-  }).join("") + '</div>';
+function trackingCard(id, text, weekEntries) {
+  const iso = selectedDate;
+  const answer = d.days[iso]?.answers[id] || {};
+  const doneCount = weekEntries.filter(entry => entry.id === id && entry.status === "done").length;
+  const previousDays = Object.keys(d.days).filter(date => date < iso && d.days[date].items.includes(id) && d.days[date].answers[id]?.status === "done").sort();
+  const previous = d.days[previousDays[previousDays.length-1]]?.answers[id];
+  const zone = zoneFor(weekEntries.filter(entry => entry.id === id));
+  const count = doneCount ? '<p class="counts">Отметок «Сделала» за неделю: '+doneCount+'</p>' : '';
+  const statuses = [["done","Сделала"],["partial","Частично"],["post","Отложила"]].map(([value,title]) =>
+    '<button class="chip '+(answer.status===value?'active':'')+'" aria-pressed="'+(answer.status===value)+'" data-state="'+esc(id)+'" data-val="'+value+'">'+title+'</button>'
+  ).join("");
+  const noteId = 'note-'+id;
+  const notes = '<div class="note-heading"><label for="'+esc(noteId)+'">Заметка к гипотезе</label>'+
+    '<button type="button" class="dictation" data-dictate="'+esc(noteId)+'">🎙 Диктовать</button></div>'+
+    '<textarea id="'+esc(noteId)+'" class="field" rows="2" data-comment="'+esc(id)+'" placeholder="Что получилось или что помешало?">'+esc(answer.note)+'</textarea>'+
+    '<p class="voice-status" role="status" id="'+esc(noteId)+'-status"></p>';
+  const followup = answer.status === "done" && previous
+    ? '<div class="notice"><b>Прошлый результат</b><br>'+esc(previous.note || "Отмечено без комментария")+'</div>'+
+      '<label for="difference-'+esc(id)+'">Что изменилось с прошлого раза?</label><textarea id="difference-'+esc(id)+'" class="field" rows="2" data-difference="'+esc(id)+'">'+esc(answer.difference)+'</textarea>'+
+      '<label for="progress-'+esc(id)+'">Есть продвижение к намерению?</label><select id="progress-'+esc(id)+'" class="field" data-progress="'+esc(id)+'">'+
+      [["","Пока не оценила"],["yes","Да, есть новый результат"],["same","Поддерживаю результат"],["no","Пока без продвижения"]].map(([value,title]) =>
+        '<option value="'+value+'"'+((answer.progress||"")===value?' selected':'')+'>'+title+'</option>').join("")+'</select>'
+    : '';
+  const reason = answer.status === "post"
+    ? '<label for="reason-'+esc(id)+'">Почему отложила?</label><textarea id="reason-'+esc(id)+'" class="field" rows="2" data-reason="'+esc(id)+'">'+esc(answer.reason)+'</textarea>'
+    : '';
+  return '<article class="card tracking-card"><h4>'+esc(text)+'</h4>'+zoneBadge(zone)+'<p class="counts">'+esc(zone.reason)+'</p>'+count+
+    '<div class="statuses" role="group" aria-label="Отметка за день">'+statuses+'</div>'+notes+followup+reason+'</article>';
 }
-function renderChoose(){const items=plannedFor(selectedDate),count=items.length;return '<h2>Гипотезы на неделю</h2><div class="notice">'+weekLabel(selectedDate)+' · Можно выбрать из разных намерений.</div><div class="card"><label>Намерение</label><select id="goal-select" class="field">'+SECTIONS.map((g,i)=>'<option value="'+i+'" '+(i===goal?'selected':'')+'>'+esc(g[0])+'</option>').join("")+'</select><p class="muted">'+esc(SECTIONS[goal][1])+'</p></div><div class="card"><div class="row"><h3 style="margin:0">Гипотезы</h3><span class="pill">'+allHyp(goal).length+' в намерении</span></div><p class="muted">Нажимай на любые гипотезы — галочки сохраняются, даже если переключаешь намерение.</p>'+allHyp(goal).map(h=>'<button class="choice '+(items.includes(h.id)?'active':'')+'" aria-pressed="'+items.includes(h.id)+'" data-add="'+esc(h.id)+'"><span style="display:inline-block;width:25px;font-size:18px;color:#91577a">'+(items.includes(h.id)?'☑':'☐')+'</span>'+esc(h.text)+'</button>').join("")+'</div><div class="card"><h3>Добавить своё</h3><textarea class="field" id="custom-text" rows="2" placeholder="Новая гипотеза или действие"></textarea><div class="row"><button class="secondary" data-add-custom="hyp">+ Гипотеза в карту</button><button class="secondary" data-add-custom="week">+ На эту неделю</button></div></div><div class="card" style="position:sticky;bottom:76px;z-index:10;box-shadow:0 8px 30px #aa7a9940"><div class="row"><b>Выбрано на неделю</b><span class="pill" id="selected-count">'+count+'</span></div><button class="primary full" data-goto="today">Готово</button></div>'}
-function renderCalendar(){return '<h2>Календарь активности</h2><div class="card"><label>Выбери неделю</label><input id="week-date" type="date" class="field" value="'+weekDate+'"></div>'+weekPicker(weekDate)+'<div class="card"><h3>Записи за неделю</h3>'+Array.from({length:7},(_,i)=>{let dt=shift(startWeek(weekDate),i),a=d.days[dt],n=a?.items.length||0;return '<button data-date="'+dt+'" class="choice"><b>'+dateText(dt)+'</b> · '+(n?n+' гипотез':'Нет записи')+' <span style="float:right">›</span></button>'}).join("")+'<p class="muted">Нет записи ≠ нет действий. Можно заполнить прошедшую дату.</p></div>'}
-function recordsInWeek(date){let mo=startWeek(date),out=[];for(let i=0;i<7;i++){let iso=shift(mo,i),a=d.days[iso];if(a)for(let id of a.items){let v=a.answers[id]||{},h=labelFor(id);out.push({iso,id,g:h.g,text:h.text,status:v.status||"none",note:v.note||"",reason:v.reason||"",difference:v.difference||"",progress:v.progress||""})}}return out}
-function weekReport(){let arr=recordsInWeek(weekDate), by={};for(let r of arr){if(!by[r.g])by[r.g]=[];by[r.g].push(r)}let start=startWeek(weekDate),end=shift(start,6),ext=d.notes[start]||{},names={done:"Выполнено",partial:"Частично",post:"Отложено",none:"Без отметки"};let txt="Недельный отчёт\n"+(d.identity||"#participant")+" "+start.split("-").reverse().join(".")+"–"+end.split("-").reverse().join(".")+"\n\n";if(ext.extra)txt+=ext.extra+"\n\n";Object.keys(by).sort((a,b)=>a-b).forEach(g=>{txt+=SECTIONS[g][0]+"\n\n"+SECTIONS[g][1]+"\n\n"+by[g].map(r=>r.text+" — "+names[r.status]+(r.note?". "+r.note:"")+(r.difference?" Отличие от прошлого раза: "+r.difference:"")+(ext.includeWhy&&r.reason?" Причина: "+r.reason:"")).join("\n")+"\n\n"});txt+="Самоуважение — "+(ext.respect??80)+"%\nВовлечённость — "+(ext.engagement??80)+"%\nУровень счастья — "+(ext.happiness??80)+"%";return {txt,start,arr}}
-function renderReport(){let r=weekReport(),ext=d.notes[r.start]||{},byDone=r.arr.filter(x=>x.status==="done").length,miss=r.arr.filter(x=>x.status==="post").length,days=new Set(r.arr.map(x=>x.iso)).size;return '<h2>Недельный отчёт</h2><div class="notice">В программе окно сдачи открывается в пятницу на 24–48 часов. Здесь ты можешь проверить отчёт в любой день.</div><div class="card"><label>Неделя</label><input id="week-date" type="date" class="field" value="'+weekDate+'"><div class="grid3"><div class="metric"><b>'+days+'/7</b><span class="muted">дней с записями</span></div><div class="metric"><b>'+byDone+'</b><span class="muted">сделано</span></div><div class="metric"><b>'+miss+'</b><span class="muted">переносов</span></div></div><label>Дополнительные результаты и впечатления</label><textarea class="field" id="report-extra" rows="3" placeholder="Что ещё произошло за неделю?">'+esc(ext.extra)+'</textarea><div class="grid3">'+[["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]].map(x=>'<div><label>'+x[1]+'</label><input class="field" type="number" min="0" max="100" data-score="'+x[0]+'" value="'+(ext[x[0]]??80)+'"></div>').join("")+'</div><label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Включить причины переносов в отчёт</label></div><div class="card"><h3>Предпросмотр для Telegram</h3><pre id="preview" style="white-space:pre-wrap;font:13px -apple-system,system-ui;line-height:1.55">'+esc(r.txt)+'</pre></div><button class="primary full" data-copy="report">Скопировать отчёт</button><button class="secondary full" data-share="report">Поделиться в Telegram</button><p class="muted">Ничего не отправляется автоматически. Перед отправкой ты сама проверяешь текст.</p>'}
-function renderProgress(){let all=Object.entries(d.days),actions=all.reduce((sum,[_,x])=>sum+x.items.length,0),done=all.reduce((sum,[_,x])=>sum+Object.values(x.answers).filter(v=>v.status==="done").length,0);let start=startWeek(localDate());let month=localDate().slice(0,7),previous=localDate(new Date(new Date().getFullYear(),new Date().getMonth()-1,1)).slice(0,7),cur=d.months[month]||{},prev=d.months[previous]||{};return '<h2>Моя динамика</h2><div class="card"><div class="grid3"><div class="metric"><b>'+all.length+'</b><span class="muted">дней с данными</span></div><div class="metric"><b>'+actions+'</b><span class="muted">выбрано</span></div><div class="metric"><b>'+done+'</b><span class="muted">выполнено</span></div></div></div><div class="card"><h3>Мои топ-3 намерения</h3>'+SECTIONS.map((s,i)=>'<button class="choice '+(d.top.includes(i)?'active':'')+'" data-top="'+i+'">'+(d.top.includes(i)?'★ ':'☆ ')+esc(s[0])+'</button>').join("")+'</div><div class="card"><h3>Месячная самооценка</h3><p class="muted">Оцени каждую сферу от 1 до 10. Приложение сравнит оценки с предыдущим месяцем.</p>'+["Отношения","Здоровье","Деятельность","Окружение"].map((x,i)=>'<label>'+x+' · было '+(prev[i]||"—")+', сейчас '+(cur[i]||"—")+'</label><input type="range" min="1" max="10" value="'+(cur[i]||5)+'" data-month="'+i+'">').join("")+'<label>Что изменилось и что могло повлиять?</label><textarea class="field" id="month-note" rows="3" placeholder="Мои мысли и наблюдения...">'+esc(cur.note||"")+'</textarea></div><div class="card"><h3>Резервная копия</h3><p class="muted">Данные хранятся в этом браузере на iPhone. Регулярно сохраняй копию, особенно перед очисткой Safari.</p><button class="secondary full" data-export="1">Скачать резервную копию JSON</button></div><a href="/logout" class="muted">Выйти из приложения</a>'}
-function render(){navbar();$("main").innerHTML=page==="today"?renderToday():page==="choose"?renderChoose():page==="calendar"?renderCalendar():page==="report"?renderReport():renderProgress()}
-document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav){page=b.dataset.nav;render();return}if(b.dataset.goto){page=b.dataset.goto;render();window.scrollTo(0,0);return}if(b.dataset.date){selectedDate=b.dataset.date;weekDate=b.dataset.date;page="today";render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.remove){const day=dayObj(selectedDate);day.items=day.items.filter(id=>id!==b.dataset.remove);save();render();return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){(d.plans ||= {})[startWeek(selectedDate)]=[...plannedFor(selectedDate),id]}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.copy){try{await navigator.clipboard.writeText(weekReport().txt);alert("Отчёт скопирован")}catch(x){alert("Не удалось скопировать")};return}if(b.dataset.share){window.open("https://t.me/share/url?url=&text="+encodeURIComponent(weekReport().txt),"_blank");return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
-document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="date-field"){if(t.value){selectedDate=t.value;weekDate=t.value}render()}if(t.id==="week-date"){weekDate=t.value;selectedDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.score){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={}))[t.dataset.score]=Number(t.value);save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
-document.addEventListener("input",e=>{let t=e.target;if(t.dataset.comment){recordAnswer(t.dataset.comment).note=t.value;save()}if(t.dataset.reason){recordAnswer(t.dataset.reason).reason=t.value;save()}if(t.dataset.difference){recordAnswer(t.dataset.difference).difference=t.value;save()}if(t.dataset.diary!==undefined){dayObj(selectedDate).diary=t.value;save()}if(t.id==="report-extra"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).extra=t.value;save()}if(t.id==="month-note"){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={})).note=t.value;save()}});
+function renderTrack() {
+  const groups = sectionsById(plannedFor(selectedDate));
+  const entries = recordsInWeek(selectedDate);
+  const content = groups.map(([g, items]) =>
+    '<section class="tracking-group"><h3>'+categoryTitle(g)+'</h3>'+
+    items.map(({id,text}) => trackingCard(id,text,entries)).join("")+'</section>'
+  ).join("");
+  const diary = d.days[selectedDate]?.diary || "";
+  return '<h2 class="page-title">Гипотезы</h2>' +
+    (groups.length
+      ? '<p class="page-intro">Отметь, что удалось сделать сегодня.</p>'+content+
+        '<details class="card"><summary>Общая заметка о дне</summary><textarea class="field" aria-label="Общая заметка о дне" data-diary rows="2">'+esc(diary)+'</textarea></details>'
+      : '<div class="card"><p class="muted">Выбери гипотезы на неделю, чтобы отмечать результаты.</p><button class="primary full" data-goto="choose">Выбрать гипотезы</button></div>');
+}
+let activeDictation;
+function dictate(button) {
+  const field = $(button.dataset.dictate);
+  const status = $(button.dataset.dictate+"-status");
+  if (activeDictation?.button === button) {
+    activeDictation.recognition.stop();
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const keyboard = () => {
+    status.textContent = "Открой клавиатуру и нажми на её микрофон.";
+    field.focus();
+  };
+  if (!SpeechRecognition) { keyboard(); return; }
+  if (activeDictation) {
+    const previous = activeDictation;
+    activeDictation = undefined;
+    previous.button.textContent = "🎙 Диктовать";
+    $(previous.button.dataset.dictate+"-status").textContent = "";
+    previous.recognition.abort();
+  }
+  const recognition = new SpeechRecognition();
+  const session = {recognition,button};
+  activeDictation = session;
+  recognition.lang = "ru-RU";
+  recognition.continuous = true;
+  recognition.onresult = event => {
+    if (activeDictation !== session || !field.isConnected) return;
+    for (let i=event.resultIndex; i<event.results.length; i++) {
+      if (!event.results[i].isFinal) continue;
+      const text = event.results[i][0].transcript.trim();
+      if (!text) continue;
+      field.value += (field.value && !/\s$/.test(field.value) ? " " : "") + text;
+      field.dispatchEvent(new Event("input",{bubbles:true}));
+    }
+  };
+  recognition.onerror = () => { if (activeDictation === session) keyboard(); };
+  recognition.onend = () => {
+    if (activeDictation !== session) return;
+    activeDictation = undefined;
+    button.textContent = "🎙 Диктовать";
+    if (status.textContent === "Слушаю…") status.textContent = "Текст можно отредактировать.";
+  };
+  try {
+    recognition.start();
+    button.textContent = "Остановить";
+    status.textContent = "Слушаю…";
+  } catch {
+    activeDictation = undefined;
+    keyboard();
+  }
+}
+function renderChoose(){const items=plannedFor(selectedDate),count=items.length;return '<h2>Гипотезы на неделю</h2><div class="notice">'+weekLabel(selectedDate)+' · Можно выбрать из разных намерений.</div><div class="card"><label>Намерение</label><select id="goal-select" class="field">'+SECTIONS.map((g,i)=>'<option value="'+i+'" '+(i===goal?'selected':'')+'>'+esc(g[0])+'</option>').join("")+'</select><p class="muted">'+esc(SECTIONS[goal][1])+'</p></div><div class="card"><div class="row"><h3 style="margin:0">Гипотезы</h3><span class="pill">'+allHyp(goal).length+' в намерении</span></div><p class="muted">Нажимай на любые гипотезы — галочки сохраняются, даже если переключаешь намерение.</p>'+allHyp(goal).map(h=>'<button class="choice '+(items.includes(h.id)?'active':'')+'" aria-pressed="'+items.includes(h.id)+'" data-add="'+esc(h.id)+'"><span style="display:inline-block;width:25px;font-size:18px;color:#91577a">'+(items.includes(h.id)?'☑':'☐')+'</span>'+esc(h.text)+'</button>').join("")+'</div><div class="card"><h3>Добавить своё</h3><textarea class="field" id="custom-text" rows="2" placeholder="Новая гипотеза или действие"></textarea><div class="row"><button class="secondary" data-add-custom="hyp">+ Гипотеза в карту</button><button class="secondary" data-add-custom="week">+ На эту неделю</button></div></div><div class="card" style="position:sticky;bottom:76px;z-index:10;box-shadow:0 8px 30px #aa7a9940"><div class="row"><b>Выбрано на неделю</b><span class="pill" id="selected-count">'+count+'</span></div><button class="primary full" data-goto="plan">Готово</button></div>'}
+
+function recordsInWeek(date){let mo=startWeek(date),out=[];for(let i=0;i<7;i++){let iso=shift(mo,i),a=d.days[iso];if(a)for(let id of a.items){let v=a.answers[id]||{},h=labelFor(id);out.push({iso,id,g:h.g,text:h.text,status:v.status||"none",note:v.note||"",reason:v.reason||"",difference:v.status==="done"?v.difference||"":"",progress:v.status==="done"?v.progress||"":"","recorded":Boolean(v.status||v.note||v.reason||v.difference||v.progress)})}}return out}
+const answerNames={done:"Сделано",partial:"Частично",post:"Отложено",none:"Без отметки"};
+const progressNames={yes:"Есть продвижение",same:"Поддерживаю результат",no:"Пока без продвижения"};
+const zoneNames={green:"Зелёная зона",yellow:"Жёлтая зона",red:"Красная зона",unmarked:"Без отметок"};
+
+function summarizeWeeks(weeks) {
+  const entriesById = new Map();
+  for (const monday of weeks) {
+    const records = recordsInWeek(monday);
+    const plan = plannedFor(monday);
+    for (const id of new Set([...plan, ...records.map(record => record.id)])) {
+      if (!entriesById.has(id)) entriesById.set(id,{id,planned:0,records:[]});
+      const entry = entriesById.get(id);
+      if (plan.includes(id)) entry.planned++;
+      entry.records.push(...records.filter(record => record.id === id));
+    }
+  }
+  return entriesById;
+}
+function zoneFor(records) {
+  const marked = records.filter(record => record.recorded);
+  const latest = marked[marked.length-1];
+  if (!latest) return {color:"unmarked",reason:"Пока нет отметок"};
+  const postponed = marked.filter(record => record.status === "post").length;
+  const completed = marked.filter(record => record.status === "done").length;
+  if (latest.progress === "no" && completed >= 3) return {color:"red",reason:"Три или больше выполнений, продвижение пока не отмечено"};
+  if (latest.status === "post" && postponed >= 2) return {color:"red",reason:"Отложено несколько раз"};
+  if (latest.progress === "no") return {color:"yellow",reason:"Пока не видно продвижения"};
+  if (latest.status === "post") return {color:"yellow",reason:"Отложено"};
+  if (latest.status === "partial") return {color:"yellow",reason:"Сделано частично"};
+  if (latest.progress === "yes") return {color:"green",reason:"Есть продвижение"};
+  if (latest.progress === "same") return {color:"green",reason:"Результат поддерживается"};
+  if (latest.status === "done") return {color:"green",reason:"Есть выполненное действие"};
+  return {color:"yellow",reason:"Есть заметка, статус не указан"};
+}
+function zoneBadge(zone) {
+  return '<span class="zone-mark zone-'+zone.color+'">'+zoneNames[zone.color]+'</span>';
+}
+function recordText(record, includeWhy) {
+  return [answerNames[record.status],record.note,record.difference && "Что изменилось: "+record.difference,
+    progressNames[record.progress],includeWhy && record.reason && "Причина: "+record.reason].filter(Boolean).join(" · ");
+}
+function reportSections(entries, includeWhy, monthly=false) {
+  return sectionsById([...entries.keys()]).map(([g,items]) =>
+    '<section class="report-zone"><h3>'+categoryTitle(g)+'</h3>'+items.map(({id,text}) => {
+      const {records,planned} = entries.get(id);
+      const zone = zoneFor(records);
+      const count = status => records.filter(record => record.status===status).length;
+      const metrics = monthly
+        ? '<p class="muted">В плане недель: '+planned+' · Сделано: '+count("done")+' · Частично: '+count("partial")+' · Переносов: '+count("post")+'</p>'
+        : '';
+      return '<div class="report-entry"><b>'+esc(text)+'</b><br>'+zoneBadge(zone)+
+        '<p class="muted">'+esc(zone.reason)+'</p>'+metrics+
+        (records.length ? '<ul>'+records.map(record => '<li>'+dateText(record.iso)+' · '+esc(recordText(record,includeWhy))+'</li>').join("")+'</ul>' : '')+'</div>';
+    }).join("")+'</section>'
+  ).join("");
+}
+function reportPlain(entries, includeWhy) {
+  return sectionsById([...entries.keys()]).map(([g,items]) =>
+    SECTIONS[g][0]+"\n"+items.map(({id,text})=>{
+      const {records,planned} = entries.get(id);
+      const zone = zoneFor(records);
+      const marks = records.map(record=>dateText(record.iso)+" · "+recordText(record,includeWhy));
+      return [text+" — "+zoneNames[zone.color]+". "+zone.reason,planned ? "Недель в плане: "+planned : "",...marks].filter(Boolean).join("\n");
+    }).join("\n\n")
+  ).join("\n\n");
+}
+function weekReport() {
+  const start = startWeek(weekDate);
+  const ext = d.notes[start] || {};
+  const entries = summarizeWeeks([start]);
+  const arr = recordsInWeek(start);
+  const scores = "Самоуважение — "+(ext.respect??80)+"%\nВовлечённость — "+(ext.engagement??80)+"%\nУровень счастья — "+(ext.happiness??80)+"%";
+  const diary = Array.from({length:7},(_,i)=>shift(start,i)).filter(iso=>d.days[iso]?.diary)
+    .map(iso=>dateText(iso)+" · "+d.days[iso].diary).join("\n");
+  const txt = ["Недельный отчёт\n"+(d.identity||"#participant")+" · "+weekLabel(start),
+    reportPlain(entries,ext.includeWhy),ext.extra,diary,scores].filter(Boolean).join("\n\n");
+  return {txt,start,arr,entries};
+}
+function monthPeriods() {
+  const today = localDate();
+  const thisWeek = startWeek(today);
+  const dates = [...Object.keys(d.plans||{}).filter(iso=>d.plans[iso].length),
+    ...Object.keys(d.days).filter(iso=>d.days[iso].items.length || d.days[iso].diary),
+    ...Object.keys(d.notes)].filter(iso=>iso<=today).sort();
+  let first = startWeek((d.firstReportWeek && d.firstReportWeek<=thisWeek) ? d.firstReportWeek : dates[0] || thisWeek);
+  if (dates[0] && dates[0]<first) first = startWeek(dates[0]);
+  const periods = [];
+  for (let monday=first; monday<=thisWeek; monday=shift(monday,28)) {
+    const weeks = Array.from({length:4},(_,i)=>shift(monday,i*7));
+    periods.unshift({start:monday,weeks,finished:shift(monday,28)<=thisWeek,closed:weeks.filter(week=>week<thisWeek).length});
+  }
+  return periods;
+}
+function periodTitle(period) {
+  return dateText(period.start)+" – "+dateText(shift(period.start,27));
+}
+function monthReport() {
+  const periods = monthPeriods();
+  const period = periods[monthPeriod] || periods[0];
+  const entries = summarizeWeeks(period.weeks);
+  const byWeek = period.weeks.map(week => {
+    const records = recordsInWeek(week);
+    const total = status => records.filter(record=>record.status===status).length;
+    return {week,planned:plannedFor(week).length,done:total("done"),partial:total("partial"),post:total("post")};
+  });
+  return {period,periods,entries,byWeek};
+}
+function monthlyNotes(period) {
+  return period.weeks.map(week => {
+    const ext = d.notes[week] || {};
+    const diary = Array.from({length:7},(_,i)=>shift(week,i)).filter(iso=>d.days[iso]?.diary)
+      .map(iso=>dateText(iso)+" · "+d.days[iso].diary).join("\n");
+    const scores = [["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]]
+      .filter(([key])=>ext[key]!=null).map(([key,title])=>title+" — "+ext[key]+"%").join(", ");
+    return [ext.extra,diary,scores].some(Boolean) ? [weekLabel(week),ext.extra,diary,scores].filter(Boolean).join("\n") : "";
+  }).filter(Boolean).join("\n\n");
+}
+function renderMonthly() {
+  const {period,periods,entries,byWeek} = monthReport();
+  const commentary = d.monthAnalysis?.[period.start] || "";
+  const completedIndex = periods.findIndex(p=>p.finished);
+  const notes = monthlyNotes(period);
+  const summary = byWeek.map(({week,planned,done,partial,post}) =>
+    '<li><b>'+weekLabel(week)+'</b><br><span class="muted">В плане: '+planned+' · Сделано: '+done+' · Частично: '+partial+' · Переносов: '+post+'</span></li>'
+  ).join("");
+  return '<section class="card monthly-report"><h3>Отчёт за четыре недели</h3><p class="muted">'+periodTitle(period)+'</p>'+
+    '<div class="no-print">'+(periods.length>1 ? '<label for="month-period">Период</label><select class="field" id="month-period">'+
+      periods.map((p,i)=>'<option value="'+i+'"'+(i===monthPeriod?' selected':'')+'>'+periodTitle(p)+'</option>').join("")+'</select>' : '')+
+    (!period.finished?'<p class="muted">Завершено недель: '+period.closed+' из 4.</p>':'')+
+    (!period.finished && completedIndex>=0 ? '<button class="secondary full" data-view-period="'+completedIndex+'">Открыть готовый отчёт · '+periodTitle(periods[completedIndex])+'</button>' : '')+'</div>'+
+    '<h4>По неделям</h4><ul>'+summary+'</ul>'+
+    (entries.size ? reportSections(entries,false,true) : '<p class="muted">Пока нет гипотез и записей за этот период.</p>')+
+    (notes ? '<h4>Заметки и самооценка по неделям</h4><div class="report-text">'+esc(notes)+'</div>' : '')+
+    '<div class="no-print"><div class="report-toolbar"><button class="secondary" data-copy-analysis="month">Скопировать для ChatGPT</button>'+
+    '<button class="primary" data-print="month">Сохранить PDF</button></div>'+
+    '<label for="month-analysis">Разбор ChatGPT для PDF</label><textarea class="field" id="month-analysis" rows="3" placeholder="Вставь сюда разбор, если хочешь включить его в PDF">'+esc(commentary)+'</textarea></div>'+
+    '<section id="printed-analysis" class="hidden"><h3>Разбор ChatGPT</h3><div class="report-text"></div></section></section>';
+}
+function analysisPrompt(monthly) {
+  const instruction = "Проанализируй мои гипотезы по сферам. По каждой покажи, что я сделала, какие изменения я описала и что повторяется или не получается. Объясни зелёную, жёлтую и красную зоны, опираясь на записи. Отдельно укажи, где данных мало. Не считай отсутствие отметки невыполнением. Не придумывай результатов. Пиши простыми словами.";
+  if (!monthly) return instruction+"\n\n"+weekReport().txt;
+  const {period,entries,byWeek} = monthReport();
+  const weeks = byWeek.map(({week,planned,done,partial,post})=>weekLabel(week)+": в плане "+planned+", сделано "+done+", частично "+partial+", переносов "+post).join("\n");
+  return [instruction+" Сравни четыре недели и предложи короткий итог для PDF.",periodTitle(period),weeks,reportPlain(entries,false),monthlyNotes(period)].filter(Boolean).join("\n\n");
+}
+async function copyAnalysis(monthly) {
+  try {
+    await navigator.clipboard.writeText(analysisPrompt(monthly));
+    alert("Скопировано. Вставь текст в ChatGPT.");
+  } catch {
+    alert("Не удалось скопировать. Проверь доступ к буферу обмена.");
+  }
+}
+function printMonth() {
+  const value = $("month-analysis").value.trim();
+  const section = $("printed-analysis");
+  section.className = value ? "print-only" : "hidden";
+  section.querySelector(".report-text").textContent = value;
+  window.print();
+}
+function renderReport(){let r=weekReport(),ext=d.notes[r.start]||{},byDone=r.arr.filter(x=>x.status==="done").length,miss=r.arr.filter(x=>x.status==="post").length,days=new Set(r.arr.map(x=>x.iso)).size;return '<h2>Недельный отчёт</h2><div class="notice">В программе окно сдачи открывается в пятницу на 24–48 часов. Здесь ты можешь проверить отчёт в любой день.</div><div class="card"><label>Неделя</label><input id="week-date" type="date" class="field" value="'+weekDate+'"><div class="grid3"><div class="metric"><b>'+days+'/7</b><span class="muted">дней с записями</span></div><div class="metric"><b>'+byDone+'</b><span class="muted">сделано</span></div><div class="metric"><b>'+miss+'</b><span class="muted">переносов</span></div></div><label>Дополнительные результаты и впечатления</label><textarea class="field" id="report-extra" rows="3" placeholder="Что ещё произошло за неделю?">'+esc(ext.extra)+'</textarea><div class="grid3">'+[["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]].map(x=>'<div><label>'+x[1]+'</label><input class="field" type="number" min="0" max="100" data-score="'+x[0]+'" value="'+(ext[x[0]]??80)+'"></div>').join("")+'</div><label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Включить причины переносов в отчёт</label></div><div class="card"><h3>Гипотезы по сферам</h3>'+(r.entries.size?reportSections(r.entries,ext.includeWhy):'<p class="muted">За эту неделю пока нет гипотез или отметок.</p>')+'<button class="secondary full" data-copy-analysis="week">Скопировать для ChatGPT</button></div><div class="card"><h3>Предпросмотр для Telegram</h3><pre id="preview" style="white-space:pre-wrap;font:13px -apple-system,system-ui;line-height:1.55">'+esc(r.txt)+'</pre></div><button class="primary full" data-copy="report">Скопировать отчёт</button><button class="secondary full" data-share="report">Поделиться в Telegram</button><p class="muted">Ничего не отправляется автоматически. Перед отправкой ты сама проверяешь текст.</p>'}
+function renderProgress(){let all=Object.entries(d.days),actions=all.reduce((sum,[_,x])=>sum+x.items.length,0),done=all.reduce((sum,[_,x])=>sum+Object.values(x.answers).filter(v=>v.status==="done").length,0);let start=startWeek(localDate());let month=localDate().slice(0,7),previous=localDate(new Date(new Date().getFullYear(),new Date().getMonth()-1,1)).slice(0,7),cur=d.months[month]||{},prev=d.months[previous]||{};return '<h2 class="page-title no-print">Аналитика</h2>'+renderMonthly()+'<div class="no-print"><div class="card"><div class="grid3"><div class="metric"><b>'+all.length+'</b><span class="muted">дней с данными</span></div><div class="metric"><b>'+actions+'</b><span class="muted">выбрано</span></div><div class="metric"><b>'+done+'</b><span class="muted">выполнено</span></div></div></div><div class="card"><h3>Мои топ-3 намерения</h3>'+SECTIONS.map((s,i)=>'<button class="choice '+(d.top.includes(i)?'active':'')+'" data-top="'+i+'">'+(d.top.includes(i)?'★ ':'☆ ')+esc(s[0])+'</button>').join("")+'</div><div class="card"><h3>Месячная самооценка</h3><p class="muted">Оцени каждую сферу от 1 до 10. Приложение сравнит оценки с предыдущим месяцем.</p>'+["Отношения","Здоровье","Деятельность","Окружение"].map((x,i)=>'<label>'+x+' · было '+(prev[i]||"—")+', сейчас '+(cur[i]||"—")+'</label><input type="range" min="1" max="10" value="'+(cur[i]||5)+'" data-month="'+i+'">').join("")+'<label>Что изменилось и что могло повлиять?</label><textarea class="field" id="month-note" rows="3" placeholder="Мои мысли и наблюдения...">'+esc(cur.note||"")+'</textarea></div><div class="card"><h3>Резервная копия</h3><p class="muted">Данные хранятся в этом браузере на iPhone. Регулярно сохраняй копию, особенно перед очисткой Safari.</p><button class="secondary full" data-export="1">Скачать резервную копию JSON</button></div><a href="/logout" class="muted">Выйти из приложения</a></div>'}
+function render() {
+  if (activeDictation) {
+    const {recognition} = activeDictation;
+    activeDictation = undefined;
+    recognition.abort();
+  }
+  navbar();
+  $("main").innerHTML = page === "plan" ? renderPlan() :
+    page === "choose" ? renderChoose() :
+    page === "track" ? renderTrack() :
+    page === "report" ? renderReport() : renderProgress();
+}
+function showPage(next) {
+  selectedDate = localDate();
+  page = next;
+  render();
+  window.scrollTo(0,0);
+}
+document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.copy){try{await navigator.clipboard.writeText(weekReport().txt);alert("Отчёт скопирован")}catch(x){alert("Не удалось скопировать")};return}if(b.dataset.share){window.open("https://t.me/share/url?url=&text="+encodeURIComponent(weekReport().txt),"_blank");return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
+document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.score){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={}))[t.dataset.score]=Number(t.value);save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
+document.addEventListener("input",e=>{let t=e.target;if(t.dataset.comment){recordAnswer(t.dataset.comment).note=t.value;save()}if(t.dataset.reason){recordAnswer(t.dataset.reason).reason=t.value;save()}if(t.dataset.difference){recordAnswer(t.dataset.difference).difference=t.value;save()}if(t.dataset.diary!==undefined){dayObj(selectedDate).diary=t.value;save()}if(t.id==="report-extra"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).extra=t.value;save()}if(t.id==="month-analysis"){(d.monthAnalysis||={})[monthReport().period.start]=t.value;save()}if(t.id==="month-note"){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={})).note=t.value;save()}});
 render();
 fetch("/api/hypotheses",{credentials:"same-origin"}).then(r=>{if(!r.ok)throw Error("private data unavailable");return r.json()}).then(a=>{if(Array.isArray(a)&&a.length===8){SECTIONS.splice(0,8,...a);render()}}).catch(()=>{});
 })();
