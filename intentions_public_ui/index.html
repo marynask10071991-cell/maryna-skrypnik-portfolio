@@ -125,6 +125,29 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
   .orbit-layout,.matrix,.graph{print-color-adjust:exact;-webkit-print-color-adjust:exact}
   .story{break-inside:avoid}
 }
+
+.visit-card h3,.reflection-card h3{font-size:18px;margin:0 0 5px}
+.visit-card .page-intro,.reflection-card .page-intro{font-size:13px;margin-bottom:12px}
+.visit-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));list-style:none;padding:0;margin:0;gap:5px}
+.visit-tile{display:grid;justify-items:center;align-content:center;gap:3px;min-height:56px;background:#f3edf3;border:1px solid transparent;border-radius:11px;color:var(--muted);font-size:10px}
+.visit-tile.visited{background:#e4f3ee;color:#205741}
+.visit-tile.future{background:transparent;border:1px dashed #e0d7e1}
+.visit-tile.today{border-color:#9a7493}
+.visit-tile b{font-size:15px;color:var(--ink);line-height:1}
+.visit-legend{font-size:11px;color:var(--muted);margin:10px 0 0}
+.reflection-card{background:radial-gradient(ellipse at 100% 0%,#e6eefb 0%,transparent 66%),linear-gradient(145deg,#faf1f7,#f5ecf6);border-color:#e6d9e8}
+.score-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.score-panel{padding:8px 6px;border-radius:13px;background:#fffafde0;border:1px solid #eee4ef;min-width:0;--reflection-color:#a36295}
+.score-panel:nth-child(2){--reflection-color:#6666a9}
+.score-panel:nth-child(3){--reflection-color:#338064}
+.score-panel label{margin:0;color:var(--ink);font-size:10px;overflow-wrap:anywhere}
+.score-value{display:flex;align-items:baseline;gap:2px;color:var(--muted)}
+.score-value .field{min-width:0;width:100%;max-width:3.6rem;font-size:16px;margin:3px 0;border:0;background:transparent;padding:5px 0;color:var(--plum);font-weight:750}
+.score-value span{font-size:11px}
+.score-meter{display:block;height:5px;border-radius:9px;background:#eee7ef;overflow:hidden}
+.score-meter span{display:block;height:100%;background:var(--reflection-color);border-radius:9px}
+.reflection-card textarea{background:#fffcfe}
+@media (min-width:400px){.score-panel{padding:10px}.score-panel label{font-size:11px}}
 </style></head><body><header><div class="brand"><span class="brand-mark" aria-hidden="true">✳︎</span><h1>Мои намерения</h1></div></header><main id="main" class="wrap"></main><nav class="tabs" id="tabs" aria-label="Разделы приложения"></nav>
 <script>
 (function(){
@@ -133,6 +156,14 @@ const SECTIONS=[["Здоровье и тело","Я забочусь о своё
 const $=id=>document.getElementById(id), esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let d;try{d=JSON.parse(localStorage.getItem("my-intentions-private-v1")||"null")}catch(e){} if(!d)d={hyp:{},days:{},top:[0,3,4],notes:{},months:{},identity:"#participant"};
 const save=()=>localStorage.setItem("my-intentions-private-v1",JSON.stringify(d));
+function markVisit() {
+  const today = localDate();
+  if (d.visits?.[today]) return false;
+  (d.visits ||= {})[today] = true;
+  if (!d.visitTrackingSince || today < d.visitTrackingSince) d.visitTrackingSince = today;
+  save();
+  return true;
+}
 const localDate=dt=>{let t=dt||new Date();return t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0")+"-"+String(t.getDate()).padStart(2,"0")};
 const shift=(iso,n)=>{let v=new Date(iso+"T12:00:00");v.setDate(v.getDate()+n);return localDate(v)};
 const startWeek=iso=>{let n=(new Date(iso+"T12:00:00").getDay()+6)%7;return shift(iso,-n)};
@@ -344,21 +375,6 @@ function recordText(record, includeWhy) {
   return [answerNames[record.status],record.note,record.difference && "Что изменилось: "+record.difference,
     progressNames[record.progress],includeWhy && record.reason && "Причина: "+record.reason].filter(Boolean).join(" · ");
 }
-function reportSections(entries, includeWhy, monthly=false) {
-  return sectionsById([...entries.keys()]).map(([g,items]) =>
-    '<section class="report-zone"><h3>'+categoryTitle(g)+'</h3>'+items.map(({id,text}) => {
-      const {records,planned} = entries.get(id);
-      const zone = zoneFor(records);
-      const count = status => records.filter(record => record.status===status).length;
-      const metrics = monthly
-        ? '<p class="muted">В плане недель: '+planned+' · Сделано: '+count("done")+' · Частично: '+count("partial")+' · Переносов: '+count("post")+'</p>'
-        : '';
-      return '<div class="report-entry"><b>'+esc(text)+'</b><br>'+zoneBadge(zone)+
-        '<p class="muted">'+esc(zone.reason)+'</p>'+metrics+
-        (records.length ? '<ul>'+records.map(record => '<li>'+dateText(record.iso)+' · '+esc(recordText(record,includeWhy))+'</li>').join("")+'</ul>' : '')+'</div>';
-    }).join("")+'</section>'
-  ).join("");
-}
 function reportPlain(entries, includeWhy) {
   return sectionsById([...entries.keys()]).map(([g,items]) =>
     SECTIONS[g][0]+"\n"+items.map(({id,text})=>{
@@ -374,7 +390,7 @@ function weekReport() {
   const ext = d.notes[start] || {};
   const entries = summarizeWeeks([start]);
   const arr = recordsInWeek(start);
-  const scores = "Самоуважение — "+(ext.respect??80)+"%\nВовлечённость — "+(ext.engagement??80)+"%\nУровень счастья — "+(ext.happiness??80)+"%";
+  const scores = reflectionScores.filter(([key])=>ext[key]!=null).map(([key,title])=>title+" — "+ext[key]+"%").join("\n");
   const diary = Array.from({length:7},(_,i)=>shift(start,i)).filter(iso=>d.days[iso]?.diary)
     .map(iso=>dateText(iso)+" · "+d.days[iso].diary).join("\n");
   const txt = ["Недельный отчёт\n"+(d.identity||"#participant")+" · "+weekLabel(start),
@@ -505,7 +521,6 @@ function renderMonthly() {
     (!period.finished?'<p class="muted">Завершено недель: '+period.closed+' из 4.</p>':'')+
     (!period.finished && completedIndex>=0 ? '<button class="secondary full" data-view-period="'+completedIndex+'">Открыть готовый отчёт · '+periodTitle(periods[completedIndex])+'</button>' : '')+'</div>'+
     monthlyVisual(byWeek,entries)+
-    (entries.size ? '<details class="card report-details no-print"><summary>Гипотезы и записи по сферам</summary>'+reportSections(entries,false,true)+'</details>' : '')+
     (notes ? '<details class="card report-details no-print"><summary>Заметки и самооценка по неделям</summary><div class="report-text">'+esc(notes)+'</div></details>' : '')+
     '<div class="no-print"><div class="report-toolbar"><button class="secondary" data-copy-analysis="month">Скопировать для ChatGPT</button>'+
     '<button class="primary" data-print="month">Сохранить PDF</button></div>'+
@@ -534,26 +549,49 @@ function printMonth() {
   section.querySelector(".report-text").textContent = value;
   window.print();
 }
+function visitVisual(monday) {
+  const today = localDate();
+  const days = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  const labels = {visited:"Открывала приложение",missed:"Открытие не зафиксировано",unknown:"Нет данных",future:"День ещё не наступил"};
+  const symbols = {visited:"✓",missed:"−",unknown:"·",future:"○"};
+  let visits = 0;
+  let tracked = 0;
+  const tiles = days.map((day,i)=>{
+    const iso = shift(monday,i);
+    const state = d.visits?.[iso] ? "visited" : iso>today ? "future" :
+      !d.visitTrackingSince || iso<d.visitTrackingSince ? "unknown" : "missed";
+    if (state==="visited") visits++;
+    if (state==="visited" || state==="missed") tracked++;
+    const label = dateText(iso)+" · "+labels[state];
+    return '<li class="visit-tile '+state+(iso===today?' today':'')+'" aria-label="'+esc(label)+'" title="'+esc(label)+'"><span>'+day+'</span><b aria-hidden="true">'+symbols[state]+'</b><span>'+Number(iso.slice(-2))+'</span></li>';
+  }).join("");
+  const info = tracked ? 'Дней с заходом — '+visits : 'За эту неделю история открытий ещё не записывалась.';
+  return '<section class="card visit-card"><h3>Мои заходы</h3><p class="page-intro">'+info+'</p>'+
+    '<ol class="visit-strip">'+tiles+'</ol>'+
+    '<p class="visit-legend">✓ Заходила &nbsp; − Без захода &nbsp; · Нет данных &nbsp; ○ Впереди</p></section>';
+}
+const reflectionScores = [["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]];
+function reflectionCard(ext) {
+  const scores = reflectionScores.map(([key,title])=>{
+    const value = ext[key] ?? "";
+    return '<div class="score-panel"><label for="score-'+key+'">'+title+'</label><div class="score-value">'+
+      '<input class="field" id="score-'+key+'" type="number" inputmode="numeric" min="0" max="100" placeholder="—" data-score="'+key+'" value="'+value+'"><span>%</span></div>'+
+      '<span class="score-meter" aria-hidden="true"><span id="fill-'+key+'" style="width:'+Number(value)+'%"></span></span></div>';
+  }).join("");
+  return '<section class="card reflection-card"><h3>Как я себя чувствовала</h3><p class="page-intro">Твоя самооценка за неделю</p>'+
+    '<div class="score-grid">'+scores+'</div><label for="report-extra">Что запомнилось на этой неделе?</label>'+
+    '<textarea class="field" id="report-extra" rows="3" placeholder="Мысль, открытие или просто момент для себя">'+esc(ext.extra)+'</textarea></section>';
+}
 function renderReport() {
   const report = weekReport();
   const ext = d.notes[report.start] || {};
-  const scores = [["respect","Самоуважение"],["engagement","Вовлечённость"],["happiness","Счастье"]].map(([key,title])=>
-    '<div><label for="score-'+key+'">'+title+'</label><input class="field" id="score-'+key+'" type="number" min="0" max="100" data-score="'+key+'" value="'+(ext[key]??80)+'"></div>'
-  ).join("");
-  const details = report.entries.size ? reportSections(report.entries,ext.includeWhy) : '<p class="muted">За эту неделю записей пока нет.</p>';
   return '<h2 class="page-title">Отчёт недели</h2><div class="report-period"><span>'+weekLabel(report.start)+'</span><input id="week-date" type="date" aria-label="Выбрать неделю отчёта" class="field" style="width:auto" value="'+weekDate+'"></div>'+
-    weekVisual(report)+
-    '<details class="card report-details"><summary>Гипотезы и записи по сферам</summary>'+details+'</details>'+
-    '<details class="card report-details"><summary>Впечатления и самооценка</summary><label for="report-extra">Что ещё произошло за неделю?</label><textarea class="field" id="report-extra" rows="3">'+esc(ext.extra)+'</textarea>'+
-    '<div class="grid3">'+scores+'</div><label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Включить причины переносов в отчёт</label></details>'+
-    '<details class="card report-details"><summary>Текст для Telegram</summary><pre id="preview" class="report-text">'+esc(report.txt)+'</pre></details>'+
-    '<div class="report-toolbar"><button class="primary" data-copy="report">Скопировать отчёт</button><button class="secondary" data-share="report">В Telegram</button><button class="secondary" data-copy-analysis="week">Для ChatGPT</button></div>';
+    weekVisual(report)+visitVisual(report.start)+reflectionCard(ext)+
+    '<label class="checkboxrow"><input type="checkbox" id="share-why" '+(ext.includeWhy?'checked':'')+'>Добавить причины переносов в разбор ChatGPT</label>'+
+    '<div class="report-toolbar"><button class="secondary" data-copy-analysis="week">Скопировать для ChatGPT</button></div>';
 }
 function renderProgress(){let all=Object.entries(d.days),actions=all.reduce((sum,[_,x])=>sum+x.items.length,0),done=all.reduce((sum,[_,x])=>sum+Object.values(x.answers).filter(v=>v.status==="done").length,0);let start=startWeek(localDate());let month=localDate().slice(0,7),previous=localDate(new Date(new Date().getFullYear(),new Date().getMonth()-1,1)).slice(0,7),cur=d.months[month]||{},prev=d.months[previous]||{};return '<h2 class="page-title no-print">Аналитика</h2>'+renderMonthly()+'<div class="no-print"><div class="card"><div class="grid3"><div class="metric"><b>'+all.length+'</b><span class="muted">дней с данными</span></div><div class="metric"><b>'+actions+'</b><span class="muted">выбрано</span></div><div class="metric"><b>'+done+'</b><span class="muted">выполнено</span></div></div></div><div class="card"><h3>Мои топ-3 намерения</h3>'+SECTIONS.map((s,i)=>'<button class="choice '+(d.top.includes(i)?'active':'')+'" data-top="'+i+'">'+(d.top.includes(i)?'★ ':'☆ ')+esc(s[0])+'</button>').join("")+'</div><div class="card"><h3>Месячная самооценка</h3><p class="muted">Оцени каждую сферу от 1 до 10. Приложение сравнит оценки с предыдущим месяцем.</p>'+["Отношения","Здоровье","Деятельность","Окружение"].map((x,i)=>'<label>'+x+' · было '+(prev[i]||"—")+', сейчас '+(cur[i]||"—")+'</label><input type="range" min="1" max="10" value="'+(cur[i]||5)+'" data-month="'+i+'">').join("")+'<label>Что изменилось и что могло повлиять?</label><textarea class="field" id="month-note" rows="3" placeholder="Мои мысли и наблюдения...">'+esc(cur.note||"")+'</textarea></div><div class="card"><h3>Резервная копия</h3><p class="muted">Данные хранятся в этом браузере на iPhone. Регулярно сохраняй копию, особенно перед очисткой Safari.</p><button class="secondary full" data-export="1">Скачать резервную копию JSON</button></div><a href="/logout" class="muted">Выйти из приложения</a></div>'}
 function render() {
-  const main = $("main");
-  const reportDetails = page==="report" && main.dataset.page==="report" ? [...main.querySelectorAll(".report-details")].map(node=>node.open) : [];
-  main.dataset.page = page;
   if (activeDictation) {
     const {recognition} = activeDictation;
     activeDictation = undefined;
@@ -564,17 +602,30 @@ function render() {
     page === "choose" ? renderChoose() :
     page === "track" ? renderTrack() :
     page === "report" ? renderReport() : renderProgress();
-  if (reportDetails.length) $("main").querySelectorAll(".report-details").forEach((node,i)=>{node.open=reportDetails[i]});
 }
 function showPage(next) {
+  markVisit();
   selectedDate = localDate();
   page = next;
   render();
   window.scrollTo(0,0);
 }
-document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.copy){try{await navigator.clipboard.writeText(weekReport().txt);alert("Отчёт скопирован")}catch(x){alert("Не удалось скопировать")};return}if(b.dataset.share){window.open("https://t.me/share/url?url=&text="+encodeURIComponent(weekReport().txt),"_blank");return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
-document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.score){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={}))[t.dataset.score]=Number(t.value);save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
-document.addEventListener("input",e=>{let t=e.target;if(t.dataset.comment){recordAnswer(t.dataset.comment).note=t.value;save()}if(t.dataset.reason){recordAnswer(t.dataset.reason).reason=t.value;save()}if(t.dataset.difference){recordAnswer(t.dataset.difference).difference=t.value;save()}if(t.dataset.diary!==undefined){dayObj(selectedDate).diary=t.value;save()}if(t.id==="report-extra"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).extra=t.value;save()}if(t.id==="month-analysis"){(d.monthAnalysis||={})[monthReport().period.start]=t.value;save()}if(t.id==="month-note"){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={})).note=t.value;save()}});
+document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
+document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
+document.addEventListener("input",e=>{let t=e.target;
+if(t.dataset.score){
+  const key=t.dataset.score;
+  const notes=d.notes[startWeek(weekDate)] ||= {};
+  const value=t.value==="" ? null : Math.max(0,Math.min(100,Number(t.value)));
+  if(value===null) delete notes[key]; else {notes[key]=value;if(Number(t.value)!==value)t.value=String(value)}
+  $("fill-"+key).style.width=(value??0)+"%";
+  save();
+}
+if(t.dataset.comment){recordAnswer(t.dataset.comment).note=t.value;save()}if(t.dataset.reason){recordAnswer(t.dataset.reason).reason=t.value;save()}if(t.dataset.difference){recordAnswer(t.dataset.difference).difference=t.value;save()}if(t.dataset.diary!==undefined){dayObj(selectedDate).diary=t.value;save()}if(t.id==="report-extra"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).extra=t.value;save()}if(t.id==="month-analysis"){(d.monthAnalysis||={})[monthReport().period.start]=t.value;save()}if(t.id==="month-note"){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={})).note=t.value;save()}});
+if (!document.hidden) markVisit();
+document.addEventListener("visibilitychange",()=>{
+  if (!document.hidden && markVisit() && page==="report") render();
+});
 render();
 fetch("/api/hypotheses",{credentials:"same-origin"}).then(r=>{if(!r.ok)throw Error("private data unavailable");return r.json()}).then(a=>{if(Array.isArray(a)&&a.length===8){SECTIONS.splice(0,8,...a);render()}}).catch(()=>{});
 })();
