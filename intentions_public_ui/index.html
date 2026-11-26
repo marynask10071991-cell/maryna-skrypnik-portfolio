@@ -83,13 +83,17 @@ header{background:none;border-radius:0;padding:18px 18px 6px;max-width:620px;mar
 :root{--signal-green:#2f8161;--signal-yellow:#b37816;--signal-red:#b34861;--signal-unmarked:#d7cedc}
 .report-hero{padding:16px;background:radial-gradient(ellipse at 10% 0%,#fff9e6 0%,transparent 53%),radial-gradient(ellipse at 95% 15%,#e0ecfb 0%,transparent 57%),linear-gradient(145deg,#faf2fa,#f3e8f5 64%,#edf7f3);border-color:#e4d7e8}
 .report-hero h3{font-size:19px;margin:0 0 13px}
-.orbit-layout{display:grid;grid-template-columns:minmax(104px,132px) minmax(0,1fr);gap:12px;align-items:center}
-.orbit{display:grid;place-items:center;aspect-ratio:1;border-radius:50%;padding:11px;box-shadow:0 0 0 1px #6d4a7140,0 0 0 4px #ffffff93}
-.orbit-core{display:grid;place-content:center;width:100%;height:100%;text-align:center;border-radius:50%;background:#fcf9fc}
-.orbit-core b{font-size:24px;line-height:1.1;color:var(--plum);letter-spacing:-1px}
-.orbit-core small{font-size:10px;color:var(--muted)}
-.signals{list-style:none;margin:0;padding:0;font-size:12px}
-.signals li{display:grid;grid-template-columns:9px 1fr auto;gap:5px;align-items:center;margin:6px 0}
+.orbit-layout{display:grid;grid-template-columns:minmax(100px,134px) minmax(0,1fr);gap:11px;align-items:center}
+.orbit{display:grid;place-items:center;aspect-ratio:1;border-radius:50%;padding:13px;background:var(--pulse-ring);box-shadow:0 0 0 3px #fff9,0 6px 17px #59446920}
+.orbit-core{display:grid;justify-items:center;align-content:center;width:100%;height:100%;padding:4px;text-align:center;border-radius:50%;background:radial-gradient(circle at 24% 18%,#fff,#f6edf8);box-shadow:inset 0 0 0 1px #fff}
+.orbit-core b{font-size:27px;line-height:1.05;color:var(--plum);letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.orbit-core small{font-size:10px;color:var(--muted);max-width:10ch;line-height:1.15;margin-top:3px}
+.signals{list-style:none;margin:0;padding:0}
+.signals li+li{margin-top:3px}
+.pulse-zone{display:grid;grid-template-columns:9px minmax(0,1fr) auto;gap:5px;align-items:center;text-align:left;width:100%;padding:6px;min-height:35px;background:#ffffff60;border:1px solid transparent;border-radius:9px;font-size:11px;line-height:1.1}
+.pulse-zone[aria-pressed="true"]{background:#fff;border-color:var(--signal);box-shadow:0 3px 9px #4b344b18}
+.pulse-zone b{font-variant-numeric:tabular-nums}
+@media (min-width:365px){.pulse-zone{font-size:12px}.orbit-layout{gap:14px}}
 .signal-dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:var(--signal)}
 .signal-green{--signal:var(--signal-green)}
 .signal-yellow{--signal:var(--signal-yellow)}
@@ -463,37 +467,52 @@ function signalBar(tally) {
   return '<div class="signal-bar" role="img" aria-label="'+esc(title)+'">'+signalKeys.map(key=>
     '<span class="signal-'+key+'" style="flex:'+tally[key]+'" aria-hidden="true"></span>').join("")+'</div>';
 }
+function pulseGradient(tally, focus) {
+  const total = signalKeys.reduce((sum,key)=>sum+tally[key],0);
+  const step = 100/total;
+  const gap = Math.min(.85,step*.15);
+  const stops = [];
+  let index = 0;
+  for (const key of signalKeys) {
+    const color = focus && key!==focus ? "#e6dce9" : "var(--signal-"+key+")";
+    for (let i=0;i<tally[key];i++,index++) {
+      const start = index*step;
+      const end = index===total-1 ? 100 : (index+1)*step;
+      stops.push("transparent "+start+"% "+(start+gap/2)+"%",
+        color+" "+(start+gap/2)+"% "+(end-gap/2)+"%",
+        "transparent "+(end-gap/2)+"% "+end+"%");
+    }
+  }
+  return "conic-gradient("+stops.join(",")+")";
+}
+function selectPulseZone(button) {
+  const card = button.closest(".pulse-card");
+  const tally = {};
+  const focus = button.getAttribute("aria-pressed")==="true" ? "" : button.dataset.pulseZone;
+  card.querySelectorAll("[data-pulse-zone]").forEach(zone=>{
+    const key = zone.dataset.pulseZone;
+    tally[key] = Number(zone.dataset.count);
+    zone.setAttribute("aria-pressed",String(key===focus));
+  });
+  const total = signalKeys.reduce((sum,key)=>sum+tally[key],0);
+  card.querySelector(".orbit").style.setProperty("--pulse-ring",pulseGradient(tally,focus));
+  card.querySelector(".orbit-core b").textContent = focus ? tally[focus] : (total-tally.unmarked)+"/"+total;
+  card.querySelector(".orbit-core small").textContent = focus ? zoneNames[focus] : "гипотез с отметками";
+}
 function weekVisual(report) {
   const entries = [...report.entries.values()];
   if (!entries.length) return '<div class="card report-hero"><h3>Пульс недели</h3><p class="muted">Карта появится, когда выберешь гипотезы или добавишь отметки.</p></div>';
   const tally = zoneTally(entries);
-  let offset = 0;
-  const gradient = signalKeys.filter(key=>tally[key]).map(key=>{
-    const start = offset;
-    offset += tally[key];
-    return 'var(--signal-'+key+') '+(100*start/entries.length)+'% '+(100*offset/entries.length)+'%';
-  }).join(",");
-  const legend = signalKeys.map(key=>'<li><span class="signal-dot signal-'+key+'" aria-hidden="true"></span><span>'+zoneNames[key]+'</span><b>'+tally[key]+'</b></li>').join("");
+  const legend = signalKeys.map(key=>'<li><button class="pulse-zone signal-'+key+'" data-pulse-zone="'+key+'" data-count="'+tally[key]+'" aria-pressed="false">'+
+    '<span class="signal-dot" aria-hidden="true"></span><span>'+zoneNames[key]+'</span><b>'+tally[key]+'</b></button></li>').join("");
   const groups = sectionsById([...report.entries.keys()]).map(([g,items])=>{
     const counts = zoneTally(items.map(({id})=>report.entries.get(id)));
     return '<div class="sphere-line"><div class="sphere-label"><b>'+categoryTitle(g)+'</b><span>'+items.length+'</span></div>'+signalBar(counts)+'</div>';
   }).join("");
-  const done = report.arr.filter(record=>record.status==="done");
-  const days = new Set(report.arr.filter(record=>record.recorded).map(record=>record.iso)).size;
-  const repeated = entries.filter(entry=>zoneFor(entry.records).color==="red");
-  let finding = entries.length===tally.unmarked ? "Гипотезы в плане. Результаты появятся после первых отметок." :
-    "Дней с отметками — "+days+" из 7. Отметок «Сделала» — "+done.length+". Гипотез с выполнением — "+new Set(done.map(record=>record.id)).size+".";
-  if (repeated.length) {
-    const featured = repeated[0];
-    finding += ' Стоит посмотреть на «'+labelFor(featured.id).text+'». '+zoneFor(featured.records).reason+'.';
-  } else {
-    const progressSpheres = [...new Set(report.arr.filter(record=>record.progress==="yes").map(record=>SECTIONS[record.g][0]))];
-    if (progressSpheres.length) finding += ' Ты отметила продвижение в сферах «'+progressSpheres.join('», «')+'».';
-  }
-  return '<div class="card report-hero"><h3>Пульс недели</h3><div class="orbit-layout">'+
-    '<div class="orbit" style="background:conic-gradient('+gradient+')"><div class="orbit-core"><b>'+(entries.length-tally.unmarked)+'/'+entries.length+'</b><small>с отметками</small></div></div>'+
+  return '<div class="card report-hero pulse-card"><h3>Пульс недели</h3><div class="orbit-layout">'+
+    '<div class="orbit" style="--pulse-ring:'+pulseGradient(tally,"")+'"><div class="orbit-core" aria-live="polite"><b>'+
+    (entries.length-tally.unmarked)+'/'+entries.length+'</b><small>гипотез с отметками</small></div></div>'+
     '<ul class="signals">'+legend+'</ul></div></div>'+
-    '<div class="story"><h3>Что видно по отметкам</h3><p>'+esc(finding)+'</p></div>'+
     '<div class="card zone-section"><h3>Карта сфер</h3>'+groups+'</div>';
 }
 function monthlyVisual(byWeek,entries) {
@@ -741,7 +760,7 @@ function showPage(next) {
   render();
   window.scrollTo(0,0);
 }
-document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewFinish){finishReview();return}if(b.dataset.closeWeek){closeWeek();return}if(b.dataset.reopenWeek){reopenWeek();return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
+document.addEventListener("click",async e=>{let b=e.target.closest("button");if(!b)return;if(b.dataset.nav||b.dataset.goto){showPage(b.dataset.nav||b.dataset.goto);return}if(b.dataset.pulseZone){selectPulseZone(b);return}if(b.dataset.dictate){dictate(b);return}if(b.dataset.reviewWeek){openReview(b.dataset.reviewWeek);return}if(b.dataset.reviewFinish){finishReview();return}if(b.dataset.closeWeek){closeWeek();return}if(b.dataset.reopenWeek){reopenWeek();return}if(b.dataset.reviewMove){moveReview(Number(b.dataset.reviewMove));return}if(b.dataset.copyAnalysis){await copyAnalysis(b.dataset.copyAnalysis==="month");return}if(b.dataset.print){printMonth();return}if(b.dataset.viewPeriod){monthPeriod=Number(b.dataset.viewPeriod);render();return}if(b.dataset.add){updateWeekPlan(b.dataset.add);return}if(b.dataset.state){recordAnswer(b.dataset.state).status=b.dataset.val;save();render();return}if(b.dataset.addCustom){let v=$("custom-text").value.trim();if(!v)return;let id="user-"+Date.now();(d.hyp[goal]||(d.hyp[goal]=[])).push({id,text:v});if(b.dataset.addCustom==="week"){const monday=startWeek(selectedDate);(d.plans ||= {})[monday]=[...plannedFor(selectedDate),id];if(!d.firstReportWeek||monday<d.firstReportWeek)d.firstReportWeek=monday}save();render();return}if(b.dataset.top){let i=Number(b.dataset.top);d.top=d.top.includes(i)?d.top.filter(v=>v!==i):d.top.length<3?[...d.top,i]:d.top;save();render();return}if(b.dataset.export){let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="moi-namereniya-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}});
 document.addEventListener("change",e=>{let t=e.target;if(t.dataset.progress){recordAnswer(t.dataset.progress).progress=t.value;save();render();}if(t.id==="month-period"){monthPeriod=Number(t.value);render()}if(t.id==="goal-select"){goal=Number(t.value);render()}if(t.id==="week-date"&&t.value){weekDate=t.value;render()}if(t.id==="share-why"){(d.notes[startWeek(weekDate)]||(d.notes[startWeek(weekDate)]={})).includeWhy=t.checked;save();render()}if(t.dataset.month){(d.months[localDate().slice(0,7)]||(d.months[localDate().slice(0,7)]={}))[t.dataset.month]=Number(t.value);save();render()}});
 document.addEventListener("input",e=>{let t=e.target;
 if(t.dataset.reviewAnswer){
